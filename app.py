@@ -1,6 +1,6 @@
 # -*- coding: UTF-8 -*-
 from flask import Flask, request, abort
-from flask_restful import reqparse, fields, marshal, Api, Resource
+from flask_restful import reqparse, inputs, fields, marshal, Api, Resource
 from mongoengine import connect
 
 from models import Message
@@ -16,22 +16,24 @@ def index():
 
 
 class Chat(Resource):
-    _fields = {
-        'user': fields.String,
-        'message': fields.String
-    }
+    def __init__(self):
+        self._fields = {
+            'user': fields.String,
+            'message': fields.String
+        }
+
+        self._parser = reqparse.RequestParser()
+        self._parser.add_argument('user')
+        self._parser.add_argument('message')
 
     def get(self):
         return [marshal(message, self._fields) for message in Message.objects]
 
     def post(self):
-        if request.is_json:
-            request_data = request.get_json()
-            message = Message(request_data['user'], request_data['message'])
-            message.save()
-            return marshal(message, self._fields), 201
-        else:
-            abort(400)
+        request_data = self._parser.parse_args(strict=True)
+        message = Message(request_data['user'], request_data['message'])
+        message.save()
+        return marshal(message, self._fields), 201
 
 api.add_resource(Chat, '/chat')
 
