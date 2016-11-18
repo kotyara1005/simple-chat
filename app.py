@@ -1,12 +1,13 @@
 # -*- coding: UTF-8 -*-
-from collections import namedtuple
-
 from flask import Flask, request, abort
-from flask.views import MethodView
-from flask.json import jsonify
+from flask_restful import reqparse, fields, marshal, Api, Resource
+from mongoengine import connect
 
-Record = namedtuple('Record', 'user message')
+from models import Message
+
+
 app = Flask(__name__)
+api = Api(app)
 
 
 @app.route('/')
@@ -14,24 +15,26 @@ def index():
     return 'Index'
 
 
-class Chat(MethodView):
-    data = []
+class Chat(Resource):
+    _fields = {
+        'user': fields.String,
+        'message': fields.String
+    }
 
     def get(self):
-        if len(self.data) < 10:
-            return jsonify(self.data)
-        else:
-            return jsonify(self.data[-10:])
+        return [marshal(message, self._fields) for message in Message.objects]
 
     def post(self):
         if request.is_json:
             request_data = request.get_json()
-            self.data.append(Record(request_data['user'],
-                                    request_data['message']))
-            return 'OK'
+            message = Message(request_data['user'], request_data['message'])
+            message.save()
+            return marshal(message, self._fields), 201
         else:
             abort(400)
-app.add_url_rule('/chat', view_func=Chat.as_view('chat'))
+
+api.add_resource(Chat, '/chat')
 
 if __name__ == '__main__':
+    connect('chat')
     app.run()
