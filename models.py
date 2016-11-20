@@ -9,5 +9,5 @@ class Message(Document):
 
 
 class User(Document, UserMixin):
-    name = fields.StringField(required=True)
+    name = fields.StringField(required=True, unique=True)
     password = fields.StringField(required=True)

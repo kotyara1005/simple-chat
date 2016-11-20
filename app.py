@@ -2,7 +2,7 @@
 from flask import Flask
 from flask_restful import reqparse, fields, marshal, Api, Resource
 from flask_login import login_required, LoginManager
-from mongoengine import connect
+from mongoengine import connect, NotUniqueError
 
 from models import Message, User
 
@@ -32,7 +32,28 @@ def load_user_from_request(request):
 @app.route('/')
 def index():
     return 'Index'
-# TODO add user registration
+
+
+class Registration(Resource):
+    def __init__(self):
+        self._fields = {
+            'name': fields.String
+        }
+        self._parser = reqparse.RequestParser()
+        self._parser.add_argument('name')
+        self._parser.add_argument('password')
+
+    def post(self):
+        request_data = self._parser.parse_args(strict=True)
+        # TODO add data validation
+        user = User(request_data['name'], request_data['password'])
+        try:
+            user.save()
+        except NotUniqueError:
+            return {'message': 'Not unique user name'}, 400
+        # TODO add user email validation
+        return marshal(user, self._fields), 201
+
 # TODO add logout
 
 
@@ -58,6 +79,9 @@ class Chat(Resource):
         message.save()
         return marshal(message, self._fields), 201
 
+
+# Resources registration
+api.add_resource(Registration, '/registration')
 api.add_resource(Chat, '/chat')
 
 if __name__ == '__main__':
@@ -66,3 +90,5 @@ if __name__ == '__main__':
 
 # TODO add app fabric
 # TODO find out how to get objects right
+# TODO add logging
+# TODO research restful status codes
