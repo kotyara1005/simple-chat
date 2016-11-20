@@ -1,13 +1,31 @@
 # -*- coding: UTF-8 -*-
-from flask import Flask, request, abort
-from flask_restful import reqparse, inputs, fields, marshal, Api, Resource
+from flask import Flask
+from flask_restful import reqparse, fields, marshal, Api, Resource
+from flask_login import login_required, LoginManager
 from mongoengine import connect
 
-from models import Message
+from models import Message, User
 
 
 app = Flask(__name__)
+login_manager = LoginManager(app)
 api = Api(app)
+
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.objects(id=user_id)
+
+
+@login_manager.request_loader
+def load_user_from_request(request):
+    api_key = request.headers.get('Authorization')
+    if api_key:
+        api_key = api_key.replace('Basic ', '', 1)
+        user = User.objects(id=api_key).first()
+        if user:
+            return user
+    return None
 
 
 @app.route('/')
@@ -16,6 +34,8 @@ def index():
 
 
 class Chat(Resource):
+    decorators = [login_required]
+
     def __init__(self):
         self._fields = {
             'user': fields.String,
