@@ -19,6 +19,7 @@ def load_user(user_id):
 
 @login_manager.request_loader
 def load_user_from_request(request):
+    # TODO improve authorization algorithm
     api_key = request.headers.get('Authorization')
     if api_key:
         api_key = api_key.replace('Basic ', '', 1)
@@ -31,6 +32,8 @@ def load_user_from_request(request):
 @app.route('/')
 def index():
     return 'Index'
+# TODO add user registration
+# TODO add logout
 
 
 class Chat(Resource):
@@ -60,3 +63,6 @@ api.add_resource(Chat, '/chat')
 if __name__ == '__main__':
     connect('chat')
     app.run()
+
+# TODO add app fabric
+# TODO find out how to get objects right
