@@ -1,6 +1,4 @@
 # -*- coding: UTF-8 -*-
-import re
-
 from flask import Flask, abort
 from flask_restful import reqparse, fields, marshal, Api, Resource, inputs
 from flask_login import login_required, LoginManager, current_user
