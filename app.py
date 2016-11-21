@@ -1,7 +1,7 @@
 # -*- coding: UTF-8 -*-
 from flask import Flask
 from flask_restful import reqparse, fields, marshal, Api, Resource
-from flask_login import login_required, LoginManager
+from flask_login import login_required, LoginManager, current_user
 from mongoengine import connect, NotUniqueError
 
 from models import Message, User
@@ -14,7 +14,7 @@ api = Api(app)
 
 @login_manager.user_loader
 def load_user(user_id):
-    return User.objects(id=user_id)
+    return User.objects(id=user_id).first()
 
 
 @login_manager.request_loader
@@ -54,6 +54,7 @@ class Registration(Resource):
         # TODO add user email validation
         return marshal(user, self._fields), 201
 
+# TODO add login
 # TODO add logout
 
 
@@ -67,7 +68,6 @@ class Chat(Resource):
         }
 
         self._parser = reqparse.RequestParser()
-        self._parser.add_argument('user')
         self._parser.add_argument('message')
 
     def get(self):
@@ -75,7 +75,8 @@ class Chat(Resource):
 
     def post(self):
         request_data = self._parser.parse_args(strict=True)
-        message = Message(request_data['user'], request_data['message'])
+        user = User.objects(id=current_user.id).first()
+        message = Message(user, request_data['message'])
         message.save()
         return marshal(message, self._fields), 201
 
