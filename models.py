@@ -6,6 +6,7 @@ from flask_login import UserMixin
 class User(Document, UserMixin):
     name = fields.StringField(required=True, unique=True)
     password = fields.StringField(required=True)
+    email = fields.StringField(required=True, unique=True)
 
     def __str__(self):
         return self.name

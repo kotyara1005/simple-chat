@@ -1,11 +1,15 @@
 # -*- coding: UTF-8 -*-
-from flask import Flask
-from flask_restful import reqparse, fields, marshal, Api, Resource
+import re
+
+from flask import Flask, abort
+from flask_restful import reqparse, fields, marshal, Api, Resource, inputs
 from flask_login import login_required, LoginManager, current_user
 from mongoengine import connect, NotUniqueError
 
 from models import Message, User
 
+
+EMAIL_REGEX = r'(^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$)'
 
 app = Flask(__name__)
 login_manager = LoginManager(app)
@@ -37,20 +41,22 @@ def index():
 class Registration(Resource):
     def __init__(self):
         self._fields = {
-            'name': fields.String
+            'name': fields.String,
+            'email': fields.String
         }
         self._parser = reqparse.RequestParser()
         self._parser.add_argument('name')
+        self._parser.add_argument('email', type=inputs.regex(EMAIL_REGEX))
         self._parser.add_argument('password')
 
     def post(self):
         request_data = self._parser.parse_args(strict=True)
         # TODO add data validation
-        user = User(request_data['name'], request_data['password'])
+        user = User(**request_data)
         try:
             user.save()
         except NotUniqueError:
-            return {'message': 'Not unique user name'}, 400
+            return abort(400, 'Not unique user name')
         # TODO add user email validation
         return marshal(user, self._fields), 201
 
