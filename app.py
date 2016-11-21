@@ -52,6 +52,7 @@ class Registration(Resource):
         # TODO add data validation
         user = User(**request_data)
         try:
+            user.set_password(user.password)
             user.save()
         except NotUniqueError:
             return abort(400, 'Not unique user name')

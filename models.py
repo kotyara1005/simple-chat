@@ -9,15 +9,13 @@ class User(Document, UserMixin):
     password = fields.StringField(required=True)
     email = fields.StringField(required=True, unique=True)
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.password = generate_password_hash(self.password,
-                                               method='pbkdf2:sha512',
-                                               salt_length=64)
-        self.save()
-
     def __str__(self):
         return self.name
+
+    def set_password(self, password):
+        self.password = generate_password_hash(password,
+                                               method='pbkdf2:sha512',
+                                               salt_length=64)
 
 
 class Message(Document):
