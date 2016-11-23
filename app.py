@@ -1,7 +1,11 @@
 # -*- coding: UTF-8 -*-
+from datetime import datetime, timedelta
+
+import jwt
 from flask import Flask, abort
 from flask_restful import reqparse, fields, marshal, Api, Resource, inputs
 from flask_login import login_required, LoginManager, current_user
+from werkzeug.security import check_password_hash
 from mongoengine import connect, NotUniqueError
 
 from models import Message, User
@@ -21,14 +25,13 @@ def load_user(user_id):
 
 @login_manager.request_loader
 def load_user_from_request(request):
-    # TODO improve authorization algorithm
-    api_key = request.headers.get('Authorization')
-    if api_key:
-        api_key = api_key.replace('Basic ', '', 1)
-        user = User.objects(id=api_key).first()
-        if user:
-            return user
-    return None
+    try:
+        api_key = request.headers['Authorization']
+        token = api_key.replace('JWT ', '', 1)
+        payload = jwt.decode(token, 'secret')
+        return User.objects(id=payload['id']).first()
+    except Exception:
+        return None
 
 
 @app.route('/')
@@ -43,9 +46,10 @@ class Registration(Resource):
             'email': fields.String
         }
         self._parser = reqparse.RequestParser()
-        self._parser.add_argument('name')
-        self._parser.add_argument('email', type=inputs.regex(EMAIL_REGEX))
-        self._parser.add_argument('password')
+        self._parser.add_argument('name', required=True)
+        self._parser.add_argument('email', type=inputs.regex(EMAIL_REGEX),
+                                  required=True)
+        self._parser.add_argument('password', required=True)
 
     def post(self):
         request_data = self._parser.parse_args(strict=True)
@@ -59,7 +63,32 @@ class Registration(Resource):
         # TODO add user email validation
         return marshal(user, self._fields), 201
 
-# TODO add login
+
+class Login(Resource):
+    def __init__(self):
+        self._parser = reqparse.RequestParser()
+        self._parser.add_argument('name')
+        self._parser.add_argument('email', type=inputs.regex(EMAIL_REGEX))
+        self._parser.add_argument('password', required=True)
+
+    def post(self):
+        request_data = self._parser.parse_args()
+        if request_data['name']:
+            user = User.objects(name=request_data['name']).first()
+        elif request_data['email']:
+            user = User.objects(email=request_data['email']).first()
+        else:
+            abort(400, 'You must provide user name or email for login')
+        if check_password_hash(user.password, request_data['password']):
+            payload = {
+                'exp': datetime.utcnow() + timedelta(days=1),
+                'id': str(user.id)
+            }
+            token = jwt.encode(payload, 'secret').decode('utf-8')
+            return {'token': token}
+        else:
+            abort(400, 'Bad password')
+
 # TODO add logout
 
 
@@ -88,6 +117,7 @@ class Chat(Resource):
 
 # Resources registration
 api.add_resource(Registration, '/registration')
+api.add_resource(Login, '/login')
 api.add_resource(Chat, '/chat')
 
 if __name__ == '__main__':
@@ -95,6 +125,5 @@ if __name__ == '__main__':
     app.run()
 
 # TODO add app fabric
-# TODO find out how to get objects right
 # TODO add logging
 # TODO research restful status codes
