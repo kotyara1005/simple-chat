@@ -53,7 +53,6 @@ class Registration(Resource):
 
     def post(self):
         request_data = self._parser.parse_args(strict=True)
-        # TODO add data validation
         user = User(**request_data)
         try:
             user.set_password(user.password)
