@@ -1,13 +1,37 @@
 # -*- coding: UTF-8 -*-
-from flask import Flask, request, abort
-from flask_restful import reqparse, inputs, fields, marshal, Api, Resource
-from mongoengine import connect
+from datetime import datetime, timedelta
 
-from models import Message
+import jwt
+from flask import Flask, abort
+from flask_restful import reqparse, fields, marshal, Api, Resource, inputs
+from flask_login import login_required, LoginManager, current_user
+from werkzeug.security import check_password_hash
+from mongoengine import connect, NotUniqueError
 
+from models import Message, User
+
+
+EMAIL_REGEX = r'(^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$)'
 
 app = Flask(__name__)
+login_manager = LoginManager(app)
 api = Api(app)
+
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.objects(id=user_id).first()
+
+
+@login_manager.request_loader
+def load_user_from_request(request):
+    try:
+        api_key = request.headers['Authorization']
+        token = api_key.replace('JWT ', '', 1)
+        payload = jwt.decode(token, 'secret')
+        return User.objects(id=payload['id']).first()
+    except Exception:
+        return None
 
 
 @app.route('/')
@@ -15,7 +39,61 @@ def index():
     return 'Index'
 
 
+class Registration(Resource):
+    def __init__(self):
+        self._fields = {
+            'name': fields.String,
+            'email': fields.String
+        }
+        self._parser = reqparse.RequestParser()
+        self._parser.add_argument('name', required=True)
+        self._parser.add_argument('email', type=inputs.regex(EMAIL_REGEX),
+                                  required=True)
+        self._parser.add_argument('password', required=True)
+
+    def post(self):
+        request_data = self._parser.parse_args(strict=True)
+        user = User(**request_data)
+        try:
+            user.set_password(user.password)
+            user.save()
+        except NotUniqueError:
+            return abort(400, 'Not unique user name')
+        # TODO add user email validation
+        return marshal(user, self._fields), 201
+
+
+class Login(Resource):
+    def __init__(self):
+        self._parser = reqparse.RequestParser()
+        self._parser.add_argument('name')
+        self._parser.add_argument('email', type=inputs.regex(EMAIL_REGEX))
+        self._parser.add_argument('password', required=True)
+
+    def post(self):
+        request_data = self._parser.parse_args()
+        if request_data['name']:
+            user = User.objects(name=request_data['name']).first()
+        elif request_data['email']:
+            user = User.objects(email=request_data['email']).first()
+        else:
+            abort(400, 'You must provide user name or email for login')
+        if check_password_hash(user.password, request_data['password']):
+            payload = {
+                'exp': datetime.utcnow() + timedelta(days=1),
+                'id': str(user.id)
+            }
+            token = jwt.encode(payload, 'secret').decode('utf-8')
+            return {'token': token}
+        else:
+            abort(400, 'Bad password')
+
+# TODO add logout
+
+
 class Chat(Resource):
+    decorators = [login_required]
+
     def __init__(self):
         self._fields = {
             'user': fields.String,
@@ -23,7 +101,6 @@ class Chat(Resource):
         }
 
         self._parser = reqparse.RequestParser()
-        self._parser.add_argument('user')
         self._parser.add_argument('message')
 
     def get(self):
@@ -31,12 +108,21 @@ class Chat(Resource):
 
     def post(self):
         request_data = self._parser.parse_args(strict=True)
-        message = Message(request_data['user'], request_data['message'])
+        user = User.objects(id=current_user.id).first()
+        message = Message(user, request_data['message'])
         message.save()
         return marshal(message, self._fields), 201
 
+
+# Resources registration
+api.add_resource(Registration, '/registration')
+api.add_resource(Login, '/login')
 api.add_resource(Chat, '/chat')
 
 if __name__ == '__main__':
     connect('chat')
     app.run()
+
+# TODO add app fabric
+# TODO add logging
+# TODO research restful status codes
