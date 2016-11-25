@@ -2,7 +2,7 @@
 from datetime import datetime, timedelta
 
 import jwt
-from flask import Flask, abort
+from flask import Flask, abort, send_from_directory
 from flask_restful import reqparse, fields, marshal, Api, Resource, inputs
 from flask_login import login_required, LoginManager, current_user
 from werkzeug.security import check_password_hash
@@ -36,7 +36,7 @@ def load_user_from_request(request):
 
 @app.route('/')
 def index():
-    return 'Index'
+    return send_from_directory('templates', 'index.html')
 
 
 class Registration(Resource):
