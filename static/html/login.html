@@ -5,18 +5,18 @@
                 <h2>Please sign in</h2>
                 <div class="form-group">
                     <label for="inputEmail">Email address</label>
-                    <input type="email" id="inputEmail" class="form-control" placeholder="Email address" required autofocus>
+                    <input ng-model="user.name" id="inputEmail" class="form-control" placeholder="Email address" required autofocus>
                 </div>
                 <div class="form-group">
                     <label for="inputPassword">Password</label>
-                    <input type="password" id="inputPassword" class="form-control" placeholder="Password" required>
+                    <input ng-model="user.password" type="password" id="inputPassword" class="form-control" placeholder="Password" required>
                 </div>
                 <div class="checkbox">
                     <label>
                         <input type="checkbox" value="remember-me"> Remember me
                     </label>
                 </div>
-                <button class="btn btn-lg btn-primary btn-block" type="submit" ui-sref="chat">Sign in</button>
+                <button class="btn btn-lg btn-primary btn-block" ng-click="login()">Sign in</button>
             </form>
         </div>
     </div>
