@@ -36,7 +36,7 @@ def load_user_from_request(request):
 
 @app.route('/')
 def index():
-    return send_from_directory('templates', 'index.html')
+    return send_from_directory('static/html', 'index.html')
 
 
 class Registration(Resource):
