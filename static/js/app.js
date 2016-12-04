@@ -1,6 +1,4 @@
-console.log('app.js');
-
-angular.module('chatApp', ['ui.router', 'satellizer'])
+angular.module('chatApp', ['ui.router', 'satellizer', 'ngResource'])
     .config(function($stateProvider, $authProvider, $qProvider) {
         var loginState = {
             name: 'login',
@@ -56,19 +54,22 @@ angular.module('chatApp', ['ui.router', 'satellizer'])
                 });
         };
     })
-    .controller('ChatController', function($auth, $state) {
+    .factory('Message', ['$resource', function($resource) {
+        return $resource('/chat');
+    }])
+    .controller('ChatController', function($auth, $state, Message) {
         var self = this;
-        self.messages = [];
+        self.messages = Message.query();
 
         self.addMessage = function() {
+            if (!self.message) return;
             self.messages.push({text: self.message, user: 'New User'});
             self.message = '';
         };
         self.logout = function() {
             $auth.logout();
-            $state.go('login')
+            $state.go('login');
         }
     });
 
 //  TODO register
-//  TODO logout
