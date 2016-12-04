@@ -32,15 +32,23 @@ angular.module('chatApp', ['ui.router', 'satellizer'])
 
         $qProvider.errorOnUnhandledRejections(false);
     })
-    .run(['$state', function($state){
-        $state.go('login')
+    .run(['$auth', '$state', function($auth, $state){
+        if ($auth.isAuthenticated()) {
+            $state.go('chat');
+        } else {
+            $state.go('login')
+        }
     }])
     .controller('LoginController', function($scope, $auth, $state) {
+        if ($auth.isAuthenticated()) {
+            $state.go('chat');
+        }
         $scope.login = function() {
             console.log($scope.user)
             $auth.login($scope.user)
                 .then(function() {
                     console.log('You have successfully signed in!');
+                    console.log($auth.isAuthenticated())
                     $state.go('chat')
                 })
                 .catch(function(error) {
@@ -48,33 +56,19 @@ angular.module('chatApp', ['ui.router', 'satellizer'])
                 });
         };
     })
-    .controller('ChatController', function() {
+    .controller('ChatController', function($auth, $state) {
         var self = this;
-        self.messages = [
-            {user:'User', text:'Hi'},
-            {user:'User', text:'Hi'},
-            {user:'User', text:'Hi'},
-            {user:'User', text:'Hi'},
-            {user:'User', text:'Hi'},
-            {user:'User', text:'Hi'},
-            {user:'User', text:'Hi'},
-            {user:'User', text:'Hi'},
-            {user:'User', text:'Hi'},
-            {user:'User', text:'Hi'},
-            {user:'User', text:'Hi'},
-            {user:'User', text:'Hi'},
-            {user:'User', text:'Hi'},
-            {user:'User', text:'Hi'},
-            {user:'User', text:'Hi'},
-            {user:'User', text:'Hi'}
-        ];
+        self.messages = [];
 
         self.addMessage = function() {
-            self.messages.push({text:self.newMessage, user: 'New User'});
-            self.newMessage = '';
+            self.messages.push({text: self.message, user: 'New User'});
+            self.message = '';
         };
+        self.logout = function() {
+            $auth.logout();
+            $state.go('login')
+        }
     });
 
-// TODO register
-//  TODO login
+//  TODO register
 //  TODO logout
