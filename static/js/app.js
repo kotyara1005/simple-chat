@@ -17,7 +17,6 @@ angular.module('chatApp', ['ui.router', 'satellizer', 'ngResource'])
         $stateProvider.state(loginState);
         $stateProvider.state(chatState);
 
-
         $authProvider.baseUrl = '/';
         $authProvider.loginUrl = '/login';
         $authProvider.signupUrl = '/registration';
@@ -60,11 +59,14 @@ angular.module('chatApp', ['ui.router', 'satellizer', 'ngResource'])
     .controller('ChatController', function($auth, $state, Message) {
         var self = this;
         self.messages = Message.query();
+        self.message = new Message()
 
         self.addMessage = function() {
             if (!self.message) return;
-            self.messages.push({text: self.message, user: 'New User'});
-            self.message = '';
+            self.message.$save(function(message) {
+                self.messages.push(message);
+            });
+            self.message = new Message();
         };
         self.logout = function() {
             $auth.logout();
