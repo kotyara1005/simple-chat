@@ -2,7 +2,7 @@
 from datetime import datetime, timedelta
 
 import jwt
-from flask import Flask, abort
+from flask import Flask, abort, send_from_directory
 from flask_restful import reqparse, fields, marshal, Api, Resource, inputs
 from flask_login import login_required, LoginManager, current_user
 from werkzeug.security import check_password_hash
@@ -36,7 +36,7 @@ def load_user_from_request(request):
 
 @app.route('/')
 def index():
-    return 'Index'
+    return send_from_directory('static/html', 'index.html')
 
 
 class Registration(Resource):
@@ -52,7 +52,7 @@ class Registration(Resource):
         self._parser.add_argument('password', required=True)
 
     def post(self):
-        request_data = self._parser.parse_args(strict=True)
+        request_data = self._parser.parse_args()
         user = User(**request_data)
         try:
             user.set_password(user.password)
@@ -66,19 +66,15 @@ class Registration(Resource):
 class Login(Resource):
     def __init__(self):
         self._parser = reqparse.RequestParser()
-        self._parser.add_argument('name')
-        self._parser.add_argument('email', type=inputs.regex(EMAIL_REGEX))
+        self._parser.add_argument('login', required=True)
         self._parser.add_argument('password', required=True)
 
     def post(self):
         request_data = self._parser.parse_args()
-        if request_data['name']:
-            user = User.objects(name=request_data['name']).first()
-        elif request_data['email']:
-            user = User.objects(email=request_data['email']).first()
-        else:
-            abort(400, 'You must provide user name or email for login')
-        if check_password_hash(user.password, request_data['password']):
+        user = User.objects(name=request_data['login']).first()
+        if user is None:
+            user = User.objects(email=request_data['login']).first()
+        if user and check_password_hash(user.password, request_data['password']):
             payload = {
                 'exp': datetime.utcnow() + timedelta(days=1),
                 'id': str(user.id)
@@ -86,7 +82,7 @@ class Login(Resource):
             token = jwt.encode(payload, 'secret').decode('utf-8')
             return {'token': token}
         else:
-            abort(400, 'Bad password')
+            abort(400, 'Bad username or password')
 
 # TODO add logout
 
@@ -121,8 +117,9 @@ api.add_resource(Chat, '/chat')
 
 if __name__ == '__main__':
     connect('chat')
-    app.run()
+    app.run(debug=True)
 
+# TODO fix login
 # TODO add app fabric
 # TODO add logging
 # TODO research restful status codes
