@@ -52,7 +52,7 @@ class Registration(Resource):
         self._parser.add_argument('password', required=True)
 
     def post(self):
-        request_data = self._parser.parse_args(strict=True)
+        request_data = self._parser.parse_args()
         user = User(**request_data)
         try:
             user.set_password(user.password)

@@ -1,23 +1,21 @@
-<div class="container" >
+<div class="container" ng-controller="LoginController as ctrl">
     <div class="row">
         <div class="col-xs-offset-4 col-xs-4">
             <form class="form-signin">
                 <h2>Please sign in</h2>
                 <div class="form-group">
-                    <label for="inputEmail">Email address</label>
-                    <input ng-model="user.login" id="inputEmail" class="form-control" placeholder="Email address" required autofocus>
+                    <label for="inputLogin">Email or user name</label>
+                    <input ng-model="ctrl.user.login" id="inputLogin" class="form-control" placeholder="Email or user name" required autofocus>
                 </div>
                 <div class="form-group">
                     <label for="inputPassword">Password</label>
-                    <input ng-model="user.password" type="password" id="inputPassword" class="form-control" placeholder="Password" required>
+                    <input ng-model="ctrl.user.password" type="password" id="inputPassword" class="form-control" placeholder="Password" required>
                 </div>
-                <div class="checkbox">
-                    <label>
-                        <input type="checkbox" value="remember-me"> Remember me
-                    </label>
-                </div>
-                <button class="btn btn-lg btn-primary btn-block" ng-click="login()">Sign in</button>
+                <button class="btn btn-lg btn-primary btn-block" ng-click="ctrl.login()">Sign in</button>
+                <div>Or</div>
+                <button class="btn btn-sm btn-success btn-block" ui-sref="signUp">Register</button>
             </form>
+
         </div>
     </div>
 </div>

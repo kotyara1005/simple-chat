@@ -7,6 +7,13 @@ angular.module('chatApp', ['ui.router', 'satellizer', 'ngResource'])
             controller: 'LoginController'
         }
 
+        var signUpState = {
+            name: 'signUp',
+            url: '/sign_up',
+            templateUrl: '/static/html/registration.html',
+            controller: 'SignUpController'
+        }
+
         var chatState = {
             name: 'chat',
             url: '/chat',
@@ -15,6 +22,7 @@ angular.module('chatApp', ['ui.router', 'satellizer', 'ngResource'])
         }
 
         $stateProvider.state(loginState);
+        $stateProvider.state(signUpState);
         $stateProvider.state(chatState);
 
         $authProvider.baseUrl = '/';
@@ -36,13 +44,20 @@ angular.module('chatApp', ['ui.router', 'satellizer', 'ngResource'])
             $state.go('login')
         }
     }])
-    .controller('LoginController', function($scope, $auth, $state) {
+    .factory('Message', ['$resource', function($resource) {
+        return $resource('/chat');
+    }])
+    .factory('User', ['$resource', function($resource) {
+        return $resource('/registration');
+    }])
+    .controller('LoginController', function($auth, $state) {
+        var self = this;
         if ($auth.isAuthenticated()) {
             $state.go('chat');
         }
-        $scope.login = function() {
-            console.log($scope.user)
-            $auth.login($scope.user)
+        self.login = function() {
+            console.log(self.user)
+            $auth.login(self.user)
                 .then(function() {
                     console.log('You have successfully signed in!');
                     console.log($auth.isAuthenticated())
@@ -53,9 +68,23 @@ angular.module('chatApp', ['ui.router', 'satellizer', 'ngResource'])
                 });
         };
     })
-    .factory('Message', ['$resource', function($resource) {
-        return $resource('/chat');
-    }])
+    .controller('SignUpController', function($auth, $state, User) {
+        var self = this;
+        if ($auth.isAuthenticated()) {
+            $state.go('chat');
+        }
+        self.user = new User();
+        self.register = function() {
+            if (self.user.password1 === self.user.password2) {
+                self.user.password = self.user.password1;
+                self.user.$save(function(user) {
+                    $state.go('login');
+                }, function() {
+                    alert('FAIL!!!');
+                });
+            }
+        };
+    })
     .controller('ChatController', function($auth, $state, Message) {
         var self = this;
         self.messages = Message.query();
