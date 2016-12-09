@@ -13,9 +13,8 @@ from models import Message, User
 
 EMAIL_REGEX = r'(^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$)'
 
-app = Flask(__name__)
-login_manager = LoginManager(app)
-api = Api(app)
+login_manager = LoginManager()
+api = Api()
 
 
 @login_manager.user_loader
@@ -34,7 +33,6 @@ def load_user_from_request(request):
         return None
 
 
-@app.route('/')
 def index():
     return send_from_directory('static/html', 'index.html')
 
@@ -61,6 +59,7 @@ class Registration(Resource):
             return abort(400, 'Not unique user name')
         # TODO add user email validation
         return marshal(user, self._fields), 201
+api.add_resource(Registration, '/registration')
 
 
 class Login(Resource):
@@ -83,8 +82,7 @@ class Login(Resource):
             return {'token': token}
         else:
             abort(400, 'Bad username or password')
-
-# TODO add logout
+api.add_resource(Login, '/login')
 
 
 class Chat(Resource):
@@ -108,18 +106,27 @@ class Chat(Resource):
         message = Message(user, request_data['message'])
         message.save()
         return marshal(message, self._fields), 201
-
-
-# Resources registration
-api.add_resource(Registration, '/registration')
-api.add_resource(Login, '/login')
 api.add_resource(Chat, '/chat')
 
-if __name__ == '__main__':
+
+def create_app(config=None):
+    app = Flask(__name__)
+    login_manager.init_app(app)
+    api.init_app(app)
+    # TODO fix
+    app.route('/')(index)
     connect('chat')
+    return app
+
+
+def main():
+    app = create_app()
     app.run(debug=True)
 
-# TODO fix login
-# TODO add app fabric
+
+if __name__ == '__main__':
+    main()
+
 # TODO add logging
 # TODO research restful status codes
+# TODO add tests

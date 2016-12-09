@@ -102,5 +102,3 @@ angular.module('chatApp', ['ui.router', 'satellizer', 'ngResource'])
             $state.go('login');
         }
     });
-
-//  TODO register
