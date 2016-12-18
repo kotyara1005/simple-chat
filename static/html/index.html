@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="https://bootswatch.com/darkly/bootstrap.min.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.6.0-rc.2/angular.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.6.0-rc.2/angular-resource.min.js"></script>
+    <script src="https://unpkg.com/angular-ui-router@0.3.2/release/angular-ui-router.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/satellizer/0.15.5/satellizer.min.js"></script>
+    <script src="static/js/app.js"></script>
+    <title>Simple Chat</title>
+    <style>
+        html,body {
+            height:100%;
+        }
+
+        .container, .row {
+            height:100%;
+        }
+        .flex-row > div[class*='col-'] {
+            display: -webkit-box;
+            display: -moz-box;
+            display: -ms-flexbox;
+            display: -webkit-flex;
+            display: flex;
+            flex:0 auto;
+            height:100%;
+        }
+
+        .flex-col {
+            margin-top: 24px;
+            display: flex;
+            display: -webkit-flex;
+            flex: 1;
+            flex-flow: column nowrap;
+        }
+
+        .flex-grow {
+            display: flex;
+            -webkit-flex: 2;
+            flex: 2;
+            overflow-y: scroll;
+        }
+    </style>
+</head>
+<body ng-app="chatApp">
+    <ui-view></ui-view>
+</body>
+</html>

@@ -1,0 +1,32 @@
+
+    <div class="container">
+        <div class="row flex-row">
+            <div class="col-xs-offset-2 col-xs-8">
+                <div class="panel panel-default flex-col" ng-controller="ChatController as ctrl">
+                    <div class="panel-heading">
+                        <a class="btn btn-primary btn-xs" ng-click="ctrl.logout()">
+                          Logout
+                        </a>
+                        <span class="pull-right">Chat</span>
+                    </div>
+                    <div class="panel-body flex-grow">
+                        <ul>
+                            <li ng-repeat="message in ctrl.messages">
+                                {{message.user}}
+                                {{message.message}}
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="panel-footer">
+                        <div class="input-group">
+                            <input type="text" class="form-control" placeholder="Enter message" ng-model="ctrl.message.message">
+                            <span class="input-group-btn">
+                                <button class="btn btn-primary" type="button" ng-click="ctrl.addMessage()">Go!</button>
+                            </span>
+                        </div>
+                    </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
