@@ -8,13 +8,17 @@ from flask_login import login_required, LoginManager, current_user
 from werkzeug.security import check_password_hash
 from mongoengine import connect, NotUniqueError
 
-from models import Message, User
-
+from chat_app.models import Message, User
+from chat_app.config import config
 
 EMAIL_REGEX = r'(^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$)'
 
-login_manager = LoginManager()
-api = Api()
+app = Flask(__name__, static_folder=config.STATIC_FOLDER)
+app.config.from_object(config)
+app.debug = config.DEBUG
+login_manager = LoginManager(app)
+api = Api(app)
+connect(config.DB_NAME)
 
 
 @login_manager.user_loader
@@ -27,14 +31,15 @@ def load_user_from_request(request):
     try:
         api_key = request.headers['Authorization']
         token = api_key.replace('JWT ', '', 1)
-        payload = jwt.decode(token, 'secret')
+        payload = jwt.decode(token, config.SECRET_KEY)
         return User.objects(id=payload['id']).first()
     except Exception:
         return None
 
 
+@app.route('/')
 def index():
-    return send_from_directory('static/html', 'index.html')
+    return send_from_directory(config.STATIC_FOLDER + '/html', 'index.html')
 
 
 class Registration(Resource):
@@ -109,23 +114,8 @@ class Chat(Resource):
 api.add_resource(Chat, '/chat')
 
 
-def create_app(config=None):
-    app = Flask(__name__)
-    login_manager.init_app(app)
-    api.init_app(app)
-    # TODO fix
-    app.route('/')(index)
-    connect('chat')
-    return app
-
-
-def main():
-    app = create_app()
-    app.run(debug=True)
-
-
 if __name__ == '__main__':
-    main()
+    app.run(debug=True)
 
 # TODO add logging
 # TODO research restful status codes
