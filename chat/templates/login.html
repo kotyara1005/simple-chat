@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="container">
+    <div class="row">
+        <div class="col-xs-offset-4 col-xs-4">
+            <form class="form-signin">
+                <h2>Please sign in</h2>
+                <div class="form-group">
+                    <label for="inputLogin">Email or user name</label>
+                    <input id="inputLogin" class="form-control" placeholder="Email or user name" required autofocus>
+                </div>
+                <div class="form-group">
+                    <label for="inputPassword">Password</label>
+                    <input type="password" id="inputPassword" class="form-control" placeholder="Password" required>
+                </div>
+                <button class="btn btn-lg btn-primary btn-block" >Sign in</button>
+                <div>Or</div>
+                <button class="btn btn-sm btn-success btn-block" >Register</button>
+            </form>
+
+        </div>
+    </div>
+</div>
+{% endblock %}

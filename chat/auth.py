@@ -18,7 +18,7 @@ def load_user(user_id):
 
 
 def load_user_from_request(request):
-    with contextlib.suppress():
+    with contextlib.suppress(Exception):
         api_key = request.headers['Authorization']
         token = api_key.replace('JWT ', '', 1)
         payload = jwt.decode(token, config.SECRET_KEY)
@@ -65,6 +65,7 @@ def login(name, password):
         token,
         expires=expires.timestamp(),
     )
+    # TODO add redirect
     return jsonify({'token': token})
 
 
