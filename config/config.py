@@ -8,6 +8,6 @@ SECRET_KEY = 'secret'
 STATIC_FOLDER = None
 
 try:
-    from chat_app.config.local_settings import *
+    from config import *
 except ImportError:
     pass

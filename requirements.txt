@@ -1,0 +1,7 @@
+flask
+werkzeug
+PyJWT
+flask-login
+flask-sqlalchemy
+sqlalchemy
+marshmallow
