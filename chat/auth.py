@@ -1,35 +1,46 @@
 import contextlib
+import functools
 from datetime import datetime, timedelta
 
 import jwt
-from flask import Blueprint, abort, make_response, jsonify
-from flask_login import LoginManager, current_user
+from flask import Blueprint, abort, make_response, jsonify, request, g
 from marshmallow import fields
 from werkzeug.exceptions import MethodNotAllowed, Forbidden
 from werkzeug.security import check_password_hash
+from werkzeug.local import LocalProxy
 
 import config
 from chat.models import User, db
 from chat.utils import validate, RESTView, register_view
 
 
-def load_user(user_id):
-    return User.objects(id=user_id).first()
+def _get_user():
+    return getattr(g, 'user')
 
 
-def load_user_from_request(request):
+current_user = LocalProxy(_get_user)
+
+
+def login_required(response=None):
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            if not current_user:
+                return response if response else jsonify({}, status=401)
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
+
+
+def setup_user():
+    g.user = None
     with contextlib.suppress(Exception):
-        api_key = request.headers['Authorization']
+        api_key = request.headers.get('Authorization')
+        if api_key is None:
+            api_key = request.cookies.get(config.AUTH_COOKIE_NAME, '')
         token = api_key.replace('JWT ', '', 1)
         payload = jwt.decode(token, config.SECRET_KEY)
-        return User.query.get_or_404(payload['id'])
-
-
-def create_manager(app):
-    login_manager = LoginManager(app)
-    login_manager.user_loader(load_user)
-    login_manager.request_loader(load_user_from_request)
-    return login_manager
+        g.user = User.query.filter_by(id=payload['id']).first()
 
 
 @validate(
@@ -59,14 +70,14 @@ def login(name, password):
     expires = datetime.utcnow() + timedelta(days=1)
     token = user.create_token(expires)
 
-    response = make_response()
+    response = jsonify({'token': token})
     response.set_cookie(
         config.AUTH_COOKIE_NAME,
         token,
         expires=expires.timestamp(),
     )
     # TODO add redirect
-    return jsonify({'token': token})
+    return response
 
 
 def logout():

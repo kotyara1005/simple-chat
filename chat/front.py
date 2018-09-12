@@ -1,14 +1,13 @@
 from chat import auth
 
 from flask import Blueprint, redirect, render_template, url_for, request
-from flask_login import current_user
 
 bp = Blueprint(__name__, __name__, template_folder='templates')
 
 
 @bp.route('/')
 def index():
-    if current_user.is_anonymous:
+    if not auth.current_user:
         return redirect(url_for('chat.front.login'))
     else:
         return redirect(url_for('chat.front.chat'))
@@ -17,7 +16,7 @@ def index():
 @bp.route('/login', methods=('GET', 'POST'))
 def login():
     if request.method == 'POST':
-        auth.login()
+        return auth.login()
         return redirect(url_for('chat.front.chat'))
     return render_template('login.html')
 
@@ -31,6 +30,12 @@ def register():
 
 
 @bp.route('/chat')
+@auth.login_required()
 def chat():
     return render_template('chat.html')
 
+
+@bp.route('/list')
+@auth.login_required()
+def chat_list():
+    return render_template('list.html')

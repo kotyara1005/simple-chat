@@ -1,6 +1,5 @@
 # -*- coding: UTF-8 -*-
 import jwt
-from flask_login import UserMixin
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash
 
@@ -8,7 +7,7 @@ from werkzeug.security import generate_password_hash
 db = SQLAlchemy()
 
 
-class User(db.Model, UserMixin):
+class User(db.Model):
     id = db.Column(db.Integer(), primary_key=True)
     name = db.Column(db.String())
     password = db.Column(db.String())

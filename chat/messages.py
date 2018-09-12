@@ -1,8 +1,8 @@
 from flask import Blueprint
-from flask_login import current_user
 from marshmallow import fields
 from werkzeug.exceptions import MethodNotAllowed, Forbidden
 
+from chat.auth import current_user
 from chat.models import db, Message, Conversation, Participant
 from chat.utils import (
     RESTView,

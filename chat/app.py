@@ -7,13 +7,13 @@ from chat.utils import ApiError, handle_error
 from config import config
 
 
-# TODO use create ap
+# TODO use create app
 app = Flask(__name__, static_folder=config.STATIC_FOLDER)
 app.config.from_object(config)
 app.debug = config.DEBUG
 app.errorhandler(ApiError)(handle_error)
-login_manager = auth.create_manager(app)
 app.register_blueprint(auth.create_blueprint(), url_prefix='/api')
+app.before_request(auth.setup_user)
 app.register_blueprint(messages.create_blueprint(), url_prefix='/api')
 app.register_blueprint(front.bp, url_prefix='')
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///test.db'
