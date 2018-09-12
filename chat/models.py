@@ -13,7 +13,7 @@ class User(db.Model, UserMixin):
     name = db.Column(db.String())
     password = db.Column(db.String())
     email = db.Column(db.String())
-    conversations = db.relationship("Participants", back_populates="participant")
+    conversations = db.relationship("Participant", back_populates="participant")
 
     def __str__(self):
         return self.name

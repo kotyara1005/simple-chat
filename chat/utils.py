@@ -21,13 +21,17 @@ def handle_error(error):
     return response
 
 
-def validate(source='json', **fields):
+def validate(**fields):
     schema = type('Schema', (marshmallow.Schema,), fields)()
 
     def decorator(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
-            result = schema.load(getattr(request, source))
+            if request.is_json:
+                data = request.json
+            else:
+                data = request.form.to_dict()
+            result = schema.load(data)
             if result.errors:
                 raise ApiError(result.errors, 400)
             kwargs.update(result.data)

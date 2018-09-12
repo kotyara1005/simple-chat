@@ -4,19 +4,19 @@
 <div class="container">
     <div class="row">
         <div class="col-xs-offset-4 col-xs-4">
-            <form class="form-signin">
+            <form class="form-signin", action="/login", method="POST">
                 <h2>Please sign in</h2>
                 <div class="form-group">
                     <label for="inputLogin">Email or user name</label>
-                    <input id="inputLogin" class="form-control" placeholder="Email or user name" required autofocus>
+                    <input name="name" id="inputLogin" class="form-control" placeholder="Email or user name" required autofocus>
                 </div>
                 <div class="form-group">
                     <label for="inputPassword">Password</label>
-                    <input type="password" id="inputPassword" class="form-control" placeholder="Password" required>
+                    <input name="password" type="password" id="inputPassword" class="form-control" placeholder="Password" required>
                 </div>
-                <button class="btn btn-lg btn-primary btn-block" >Sign in</button>
+                <input type="submit" class="btn btn-lg btn-primary btn-block" value="Sign in">
                 <div>Or</div>
-                <button class="btn btn-sm btn-success btn-block" >Register</button>
+                <a href="{{ url_for('chat.front.register') }}" class="btn btn-sm btn-success btn-block" >Register</a>
             </form>
 
         </div>

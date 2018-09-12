@@ -54,7 +54,7 @@ def register(name, password):
 def login(name, password):
     user = User.query.filter_by(name=name).first()
     if not (user and check_password_hash(user.password, password)):
-        abort(400, 'Bad username or password')
+        abort(400, 'User not found')
 
     expires = datetime.utcnow() + timedelta(days=1)
     token = user.create_token(expires)
