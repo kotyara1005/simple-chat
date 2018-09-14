@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block content %}
+
+    <div class="container">
+        <div class="row flex-row">
+            <div class="col-offset-2 col-8">
+                <div class="card card-default flex-col">
+                    <div class="card-heading">
+                        <a class="btn btn-primary btn-xs">
+                          Logout
+                        </a>
+                        <a id="add-chat" class="btn btn-primary btn-xs">
+                          Add
+                        </a>
+                        <span class="pull-right">Chat</span>
+                    </div>
+                    <div class="card-body flex-grow">
+                        <ul id="chat-list" class="flex-col list-group"></ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {% raw %}
+    <script id="chat-link" type="text/x-jsrender">
+        <a href="/chat/{{:id}}/"><li class="list-group-item" data-id="{{:id}}">{{:id}}</li></a>
+    </script>
+    {% endraw %}
+
+    <script>
+        function addChat() {
+            $.ajax({
+                method: "POST",
+                url: "/api/conversation/",
+                data: {},
+            })
+            .done(function(data) {
+                console.log(data);
+                render(data)
+            });
+        }
+        function deleteChat() {
+
+        }
+        function render(data) {
+            let tmpl = $.templates("#chat-link");
+            let html = tmpl.render(data);
+            $("#chat-list").append(html);
+        }
+        function renderAll() {
+            $.ajax({
+                method: "GET",
+                url: "/api/conversation/",
+            })
+            .done(function( data ) {
+                console.log(data);
+                for (let i=0; i<data.length; i++) {
+                    render(data[i])
+                }
+            });
+        }
+        renderAll();
+        $("#add-chat").click(addChat);
+    </script>
+{% endblock %}

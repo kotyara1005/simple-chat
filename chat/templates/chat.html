@@ -4,32 +4,73 @@
     <div class="container">
         <div class="row flex-row">
             <div class="col-xs-offset-2 col-xs-8">
-                <div class="panel panel-default flex-col" ng-controller="ChatController as ctrl">
-                    <div class="panel-heading">
-                        <a class="btn btn-primary btn-xs" ng-click="ctrl.logout()">
+                <div class="card card-default flex-col">
+                    <div class="card-heading">
+                        <a class="btn btn-primary btn-xs">
                           Logout
                         </a>
                         <span class="pull-right">Chat</span>
                     </div>
-                    <div class="panel-body flex-grow">
-                        <ul>
-                            <li ng-repeat="message in ctrl.messages">
-                                {{message.user}}
-                                {{message.message}}
-                            </li>
-                        </ul>
+                    <div class="card-body flex-grow">
+                        <ul id="message-list" class="flex-col list-group"></ul>
                     </div>
-                    <div class="panel-footer">
+                    <div class="card-footer">
                         <div class="input-group">
-                            <input type="text" class="form-control" placeholder="Enter message" ng-model="ctrl.message.message">
+                            <input id="message-text" type="text" class="form-control" placeholder="Enter message">
                             <span class="input-group-btn">
-                                <button class="btn btn-primary" type="button" ng-click="ctrl.addMessage()">Go!</button>
+                                <button id="send" class="btn btn-primary" type="button">Go!</button>
                             </span>
                         </div>
-                    </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
+
+    {% raw %}
+    <script id="message" type="text/x-jsrender">
+        <li id="message-{{:id}}" class="list-group-item" data-id="{{:id}}">{{:text}}</li>
+    </script>
+    {% endraw %}
+
+    <script>
+        const chatId = {{ pk }};
+        
+        function render(data) {
+            let tmpl = $.templates("#message");
+            $("#message-list").append(tmpl.render(data));
+        }
+        $("#send").click(
+            function () {
+                text_elem = $("#message-text");
+                $.ajax({
+                    method: "POST",
+                    url: "/api/conversation/" + chatId + "/message",
+                    data: {text: text_elem.val()}
+                })
+                .done(function( data ) {
+                    console.log(data);
+                });
+                text_elem.val("");
+            }
+        );
+        const timeout = 1000;
+        function receiveMessages() {
+            $.ajax({
+                method: "GET",
+                url: "/api/conversation/" + chatId + "/message",
+                ifModified: true,
+                success: function(data, textStatus, request){
+                    for (let i=0; i<data.length; i++) {
+                        render(data[i]);
+                    }
+                }
+            }).always(
+                function () {
+                    setTimeout(receiveMessages, timeout);
+                }
+            )
+        }
+        receiveMessages();
+    </script>
 {% endblock %}

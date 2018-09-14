@@ -3,7 +3,7 @@ import functools
 from datetime import datetime, timedelta
 
 import jwt
-from flask import Blueprint, abort, make_response, jsonify, request, g
+from flask import Blueprint, abort, make_response, jsonify, request, g, redirect
 from marshmallow import fields
 from werkzeug.exceptions import MethodNotAllowed, Forbidden
 from werkzeug.security import check_password_hash
@@ -21,15 +21,26 @@ def _get_user():
 current_user = LocalProxy(_get_user)
 
 
-def login_required(response=None):
+def login_required(redirect_to=None):
+    # TODO fix redirects
     def decorator(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             if not current_user:
-                return response if response else jsonify({}, status=401)
+                if redirect_to is None:
+                    return '', 401
+                return redirect(redirect_to)
             return func(*args, **kwargs)
         return wrapper
     return decorator
+
+
+def user_id_to_kwargs(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        kwargs['user_id'] = current_user.id
+        return func(*args, **kwargs)
+    return wrapper
 
 
 def setup_user():

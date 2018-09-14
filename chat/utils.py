@@ -3,7 +3,6 @@ import functools
 import marshmallow
 from flask import request, jsonify
 from flask.views import View
-from flask_login import current_user
 from werkzeug.exceptions import MethodNotAllowed
 
 from chat.models import db
@@ -40,25 +39,23 @@ def validate(**fields):
     return decorator
 
 
-def user_id_to_kwargs(func):
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        kwargs['user_id'] = current_user.id
-        return func(*args, **kwargs)
-    return wrapper
+class CommitOnSuccess:
+    def __enter__(self):
+        pass
 
-
-def commit_on_success(func):
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        try:
-            result = func(*args, **kwargs)
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_val is None:
             db.session.commit()
-            return result
-        except Exception as error:
+        else:
             db.session.rollback()
-            raise error
-    return wrapper
+        return False
+
+    def __call__(self, func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            with self:
+                return func(*args, **kwargs)
+        return wrapper
 
 
 class RESTView(View):
@@ -67,7 +64,7 @@ class RESTView(View):
     def get_query(self) -> db.Query:
         raise NotImplementedError()
 
-    @commit_on_success
+    @CommitOnSuccess()
     def dispatch_request(self, pk=None):
         method = request.method.upper()
         if method == 'GET':
@@ -91,8 +88,9 @@ class RESTView(View):
         )
 
     def create(self, **kwargs):
-        entry = self.model(**kwargs)
-        db.session.add(entry)
+        with CommitOnSuccess():
+            entry = self.model(**kwargs)
+            db.session.add(entry)
         return jsonify(entry.to_dict())
 
     def retrieve(self, pk):

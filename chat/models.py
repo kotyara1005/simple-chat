@@ -1,4 +1,6 @@
 # -*- coding: UTF-8 -*-
+import datetime
+
 import jwt
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash
@@ -12,7 +14,7 @@ class User(db.Model):
     name = db.Column(db.String())
     password = db.Column(db.String())
     email = db.Column(db.String())
-    conversations = db.relationship("Participant", back_populates="participant")
+    conversations = db.relationship("Participant", back_populates="user")
 
     def __str__(self):
         return self.name
@@ -41,20 +43,23 @@ class User(db.Model):
 class Conversation(db.Model):
     id = db.Column(db.Integer(), primary_key=True)
     user_id = db.Column(db.Integer(), db.ForeignKey(User.id), nullable=False)
+    name = db.Column(db.String())
     participants = db.relationship("Participant", back_populates="conversation")
     messages = db.relationship("Message")
 
     def to_dict(self):
         return dict(
             id=self.id,
-            participants=[participant.to_dict() for participant in self.participants],
+            name=self.name,
+            participants=[participant.user.to_dict() for participant in self.participants],
+            messages=[message.to_dict() for message in self.messages],
         )
 
 
 class Participant(db.Model):
     user_id = db.Column(db.Integer(), db.ForeignKey(User.id), primary_key=True)
     conversation_id = db.Column(db.Integer(), db.ForeignKey(Conversation.id), primary_key=True)
-    participant = db.relationship(User, back_populates="conversations")
+    user = db.relationship(User, back_populates="conversations")
     conversation = db.relationship(Conversation, back_populates="participants")
 
 
@@ -63,6 +68,7 @@ class Message(db.Model):
     conversation_id = db.Column(db.Integer(), db.ForeignKey(Conversation.id), nullable=False)
     user_id = db.Column(db.Integer(), db.ForeignKey(User.id))
     text = db.Column(db.String(), nullable=False)
+    create_date = db.Column(db.DateTime(), default=lambda: datetime.datetime.utcnow().replace(microsecond=0))
 
     def to_dict(self):
         return dict(

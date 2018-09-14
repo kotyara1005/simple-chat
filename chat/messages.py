@@ -1,14 +1,15 @@
-from flask import Blueprint
+from datetime import datetime
+
+from flask import Blueprint, jsonify, request
 from marshmallow import fields
 from werkzeug.exceptions import MethodNotAllowed, Forbidden
 
-from chat.auth import current_user
+from chat.auth import current_user, user_id_to_kwargs, login_required
 from chat.models import db, Message, Conversation, Participant
 from chat.utils import (
     RESTView,
     validate,
-    user_id_to_kwargs,
-    commit_on_success,
+    CommitOnSuccess,
     register_view,
 )
 
@@ -22,58 +23,100 @@ class ConversationView(RESTView):
         return cls.model.query
 
     @validate()
+    @login_required()
     @user_id_to_kwargs
-    def create(self, **kwargs):
-        return super().create(**kwargs)
+    def create(self, user_id, **kwargs):
+        with CommitOnSuccess():
+            conversation = self.model(user_id=user_id, name='test', **kwargs)
+            db.session.add(conversation)
+            db.session.flush()
+
+            db.session.add(
+                Participant(
+                    user_id=user_id,
+                    conversation_id=conversation.id,
+                )
+            )
+        return jsonify(conversation.to_dict())
 
     def update(self, pk, **kwargs):
         raise MethodNotAllowed()
 
     @classmethod
-    @commit_on_success
+    @login_required()
     def add_participant(cls, conversation_id, user_id):
         conversation = cls.get_query().get(conversation_id)
         if conversation.user_id != current_user.id:
             raise Forbidden()
-        participant = Participant(
-            user_id=user_id,
-            conversation_id=conversation_id,
-        )
-        db.session.add(participant)
+
+        with CommitOnSuccess():
+            participant = Participant(
+                user_id=user_id,
+                conversation_id=conversation_id,
+            )
+            db.session.add(participant)
+        return jsonify(participant)
 
     @classmethod
-    @commit_on_success
+    @login_required()
     def delete_participant(cls, conversation_id, user_id):
         conversation = cls.get_query().get(conversation_id)
         if conversation.user_id != current_user.id:
             raise Forbidden()
-        participant = Participant.query.filter_by(
-            conversation_id=conversation_id,
-            user_id=user_id,
-        )
-        db.session.delete(participant)
+        with CommitOnSuccess():
+            participant = Participant.query.filter_by(
+                conversation_id=conversation_id,
+                user_id=user_id,
+            )
+            db.session.delete(participant)
+        return jsonify(participant.to_dict())
 
     @classmethod
     @validate(
         text=fields.String()
     )
-    @commit_on_success
+    @login_required()
     def send_message(cls, conversation_id, text):
         conversation = cls.get_query().get(conversation_id)
-        if conversation.user_id != current_user.id:
+        if current_user.id not in (participant.user_id for participant in conversation.participants):
             raise Forbidden()
-        message = Message(
-            conversation_id=conversation_id,
-            user_id=current_user.id,
-            text=text,
+
+        with CommitOnSuccess():
+            message = Message(
+                conversation_id=conversation_id,
+                user_id=current_user.id,
+                text=text,
+            )
+            db.session.add(message)
+        return jsonify(message.to_dict())
+
+    @classmethod
+    @login_required()
+    def get_messages(cls, conversation_id):
+        conversation = cls.get_query().get(conversation_id)
+        if current_user.id not in (participant.user_id for participant in conversation.participants):
+            raise Forbidden()
+
+        messages = Message.query.filter(
+            Message.conversation_id == conversation_id,
         )
-        db.session.add(message)
+        if request.if_modified_since:
+            messages = messages.filter(
+                Message.create_date > request.if_modified_since,
+            )
+        messages = messages.all()
+        response = jsonify([message.to_dict() for message in messages])
+
+        if messages:
+            response.last_modified = messages[-1].create_date
+        return response
 
 
 def create_blueprint():
     blueprint = Blueprint(__name__, __name__)
     register_view(ConversationView, blueprint, 'conversation_api', '/conversation/')
-    blueprint.add_url_rule('/participant', 'add_participant', ConversationView.add_participant, methods=('POST',))
-    blueprint.add_url_rule('/participant', 'delete_participant', ConversationView.delete_participant, methods=('DELETE',))
-    blueprint.add_url_rule('/message', 'message', ConversationView.send_message, methods=('POST',))
+    blueprint.add_url_rule('/conversation/<int:conversation_id>/participant', 'add_participant', ConversationView.add_participant, methods=('POST',))
+    blueprint.add_url_rule('/conversation/<int:conversation_id>/participant', 'delete_participant', ConversationView.delete_participant, methods=('DELETE',))
+    blueprint.add_url_rule('/conversation/<int:conversation_id>/message', 'send_message', ConversationView.send_message, methods=('POST',))
+    blueprint.add_url_rule('/conversation/<int:conversation_id>/message', 'get_message', ConversationView.get_messages, methods=('GET',))
     return blueprint

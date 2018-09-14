@@ -10,7 +10,7 @@ def index():
     if not auth.current_user:
         return redirect(url_for('chat.front.login'))
     else:
-        return redirect(url_for('chat.front.chat'))
+        return redirect(url_for('chat.front.chat_list'))
 
 
 @bp.route('/login', methods=('GET', 'POST'))
@@ -29,10 +29,10 @@ def register():
     return render_template('registration.html')
 
 
-@bp.route('/chat')
+@bp.route('/chat/<int:pk>/')
 @auth.login_required()
-def chat():
-    return render_template('chat.html')
+def chat(pk):
+    return render_template('chat.html', pk=pk)
 
 
 @bp.route('/list')
