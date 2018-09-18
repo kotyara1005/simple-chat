@@ -16,6 +16,7 @@ app.register_blueprint(auth.create_blueprint(), url_prefix='/api')
 app.before_request(auth.setup_user)
 app.register_blueprint(messages.create_blueprint(), url_prefix='/api')
 app.register_blueprint(front.bp, url_prefix='')
+#TODO move to postgres
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///test.db'
 db.init_app(app)
 
@@ -24,3 +25,6 @@ if __name__ == '__main__':
     # db.drop_all(app=app)
     db.create_all(app=app)
     app.run(debug=True)
+
+# TODO add tests
+# TODO fix css

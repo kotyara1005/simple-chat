@@ -3,7 +3,7 @@ import functools
 import marshmallow
 from flask import request, jsonify
 from flask.views import View
-from werkzeug.exceptions import MethodNotAllowed
+from werkzeug.exceptions import MethodNotAllowed, NotFound
 
 from chat.models import db
 
@@ -64,6 +64,17 @@ class RESTView(View):
     def get_query(self) -> db.Query:
         raise NotImplementedError()
 
+    @classmethod
+    def get_query_for_user(cls):
+        raise NotImplementedError()
+
+    @classmethod
+    def get_or_404(cls, pk):
+        entry = cls.get_query_for_user().filter_by(id=pk).first()
+        if entry is None:
+            raise NotFound()
+        return entry
+
     @CommitOnSuccess()
     def dispatch_request(self, pk=None):
         method = request.method.upper()
@@ -84,7 +95,10 @@ class RESTView(View):
     def list(self):
         # TODO add limit offset
         return jsonify(
-            [entry.to_dict() for entry in self.get_query().all()]
+            [
+                entry.to_dict()
+                for entry in self.get_query_for_user().all()
+            ]
         )
 
     def create(self, **kwargs):
@@ -94,16 +108,16 @@ class RESTView(View):
         return jsonify(entry.to_dict())
 
     def retrieve(self, pk):
-        return jsonify(self.get_query().get_or_404(pk).to_dict())
+        return jsonify(self.get_or_404(pk).to_dict())
 
     def update(self, pk, **kwargs):
-        entry = self.get_query().get_or_404(pk)
+        entry = self.get_or_404(pk)
         for key, value in kwargs:
             setattr(entry, key, value)
         return jsonify(entry.to_dict())
 
     def destroy(self, pk):
-        entry = self.get_query().get_or_404(pk)
+        entry = self.get_or_404(pk)
         db.session.delete(entry)
         return jsonify({})
 

@@ -39,3 +39,5 @@ def chat(pk):
 @auth.login_required()
 def chat_list():
     return render_template('list.html')
+
+# TODO disable redirects

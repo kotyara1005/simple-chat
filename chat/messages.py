@@ -1,5 +1,3 @@
-from datetime import datetime
-
 from flask import Blueprint, jsonify, request
 from marshmallow import fields
 from werkzeug.exceptions import MethodNotAllowed, Forbidden
@@ -19,8 +17,13 @@ class ConversationView(RESTView):
 
     @classmethod
     def get_query(cls) -> db.Query:
-        # TODO check rights
         return cls.model.query
+
+    @classmethod
+    def get_query_for_user(cls):
+        return cls.get_query().filter(
+            Conversation.id.in_(db.session.query(Participant.conversation_id).filter_by(user_id=current_user.id))
+        )
 
     @validate()
     @login_required()
@@ -93,12 +96,10 @@ class ConversationView(RESTView):
     @classmethod
     @login_required()
     def get_messages(cls, conversation_id):
-        conversation = cls.get_query().get(conversation_id)
-        if current_user.id not in (participant.user_id for participant in conversation.participants):
-            raise Forbidden()
+        conversation = cls.get_or_404(conversation_id)
 
         messages = Message.query.filter(
-            Message.conversation_id == conversation_id,
+            Message.conversation_id == conversation.id,
         )
         if request.if_modified_since:
             messages = messages.filter(
