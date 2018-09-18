@@ -16,7 +16,7 @@ def create_app():
     app.before_request(auth.setup_user)
     app.register_blueprint(messages.create_blueprint(), url_prefix='/api')
     app.register_blueprint(front.bp, url_prefix='')
-    #TODO move to postgres
+    # TODO move to postgres
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///test.db'
     db.init_app(app)
     return app
@@ -33,3 +33,4 @@ if __name__ == '__main__':
 # TODO add participant
 # TODO create chat
 # TODO add logout
+# TODO add swagger
