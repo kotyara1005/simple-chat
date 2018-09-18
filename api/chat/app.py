@@ -29,7 +29,6 @@ if __name__ == '__main__':
     app.run(debug=True)
 
 # TODO add tests
-# TODO docker
 # TODO add participant
 # TODO create chat
 # TODO add logout

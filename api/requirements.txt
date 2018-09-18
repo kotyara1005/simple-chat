@@ -4,3 +4,4 @@ PyJWT
 flask-sqlalchemy
 sqlalchemy
 marshmallow
+gunicorn
