@@ -6,7 +6,6 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
-	"time"
 
     "github.com/gorilla/websocket"
     "github.com/streadway/amqp"
@@ -19,6 +18,20 @@ func createUUID() string {
 
 // Group connections group
 type Group []*websocket.Conn
+
+// RemoveNIL
+func (group Group) RemoveNIL() Group {
+    current := 0
+    for i := range group {
+        if group[i] != nil {
+            if current != i {
+                group[current] = group[i]
+            }
+            current++
+        }
+    }
+    return group[:current]
+}
 
 // Worker it works
 type Worker struct {
@@ -40,13 +53,16 @@ func (w *Worker) Broadcast(groupName string, message []byte) {
     if !prs {
         return
     }
-    for _, conn := range group {
+    for i, conn := range group {
         // TODO check conn
         err := conn.WriteMessage(websocket.TextMessage, message)
         if err != nil {
-            w.DelConn(groupName, conn)
+            fmt.Println("Delete")
+            group[i] = nil
+            defer conn.Close()
         }
     }
+    w.groups[groupName] = group.RemoveNIL()
 }
 
 func failOnError(err error, msg string) {
@@ -59,14 +75,14 @@ func failOnError(err error, msg string) {
 func (w *Worker) declareAndConnect() (<-chan amqp.Delivery){
     conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
     failOnError(err, "Failed to connect to RabbitMQ")
-    defer conn.Close()
+    // defer conn.Close()
 
     ch, err := conn.Channel()
     failOnError(err, "Failed to open a channel")
-    defer ch.Close()
+    // defer ch.Close()
 
     q, err := ch.QueueDeclare(
-            "task_queue", // name
+            w.id,  // name
             true,         // durable
             true,        // delete when unused
             false,        // exclusive
@@ -74,6 +90,15 @@ func (w *Worker) declareAndConnect() (<-chan amqp.Delivery){
             nil,          // arguments
     )
     failOnError(err, "Failed to declare a queue")
+
+    err = ch.QueueBind(
+        q.Name,
+        "",
+        "fanout_logs",
+        true,
+        nil,
+    )
+    failOnError(err, "Failed on bind")
 
     err = ch.Qos(
             1,     // prefetch count
@@ -97,18 +122,23 @@ func (w *Worker) declareAndConnect() (<-chan amqp.Delivery){
 
 // Work just do your work
 func (w *Worker) Work() {
-    for {
-        time.Sleep(2 * time.Second)
-        
-        for name := range w.groups {
-            w.Broadcast(name, []byte("test test test"))
+    messages := w.declareAndConnect()
+    for msg := range messages {
+        value, prs := msg.Headers["groupName"]
+        if !prs {
+            msg.Reject(false)
+            return
         }
+
+        name := value.(string)
+        // TODO check errors
+        w.Broadcast(name, msg.Body)
+        msg.Ack(false)
     }
 }
 
 // AddConn add connection
 func (w *Worker) AddConn(groupName string, conn *websocket.Conn) {
-    // TODO too mutch locks
     defer w.lock.Unlock()
     w.lock.Lock()
     group, prs := w.groups[groupName]
@@ -117,28 +147,6 @@ func (w *Worker) AddConn(groupName string, conn *websocket.Conn) {
     } else {
         w.groups[groupName] = append(make(Group, 0), conn)
     }
-}
-
-// DelConn delete connection
-func (w *Worker) DelConn(groupName string, conn *websocket.Conn) {
-    defer w.lock.Unlock()
-    w.lock.Lock()
-    group, prs := w.groups[groupName]
-    if !prs {
-        return
-    }
-    i := 0
-    for ; i < len(group); i++ {
-        if group[i] == conn {
-            break
-        }
-    }
-    if i == len(group) {
-        return
-    }
-    copy(group[i:], group[i+1:])
-    group[len(group)-1] = nil
-    group = group[:len(group)-1]
 }
 
 var upgrader = websocket.Upgrader{
