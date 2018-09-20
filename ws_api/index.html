@@ -5,7 +5,7 @@
     <script type="text/javascript">
          function myWebsocketStart()
          {
-               var ws = new WebSocket("ws://localhost:3000/websocket");
+               var ws = new WebSocket("ws://localhost:3000/websocket?id=123");
 
                ws.onmessage = function (evt)
                {
