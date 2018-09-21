@@ -62,6 +62,7 @@ func (w *Worker) Broadcast(groupName string, message []byte) {
     }
     for i, conn := range group {
         if conn == nil {continue}
+        // TODO concurent write
         err := conn.WriteMessage(websocket.TextMessage, message)
         if err != nil {
             group[i] = nil
@@ -186,3 +187,4 @@ func main() {
 	http.ListenAndServe(":3000", nil)
 }
 // TODO safe exit
+// TODO config
