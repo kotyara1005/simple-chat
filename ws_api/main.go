@@ -54,10 +54,9 @@ func (w *Worker) Broadcast(groupName string, message []byte) {
         return
     }
     for i, conn := range group {
-        // TODO check conn
+        if conn == nil {continue}
         err := conn.WriteMessage(websocket.TextMessage, message)
         if err != nil {
-            fmt.Println("Delete")
             group[i] = nil
             defer conn.Close()
         }
@@ -130,10 +129,13 @@ func (w *Worker) Work() {
             return
         }
 
-        name := value.(string)
-        // TODO check errors
-        w.Broadcast(name, msg.Body)
-        msg.Ack(false)
+        switch name := value.(type) {
+        case string:
+            w.Broadcast(name, msg.Body)
+            msg.Ack(false)
+        default:
+            msg.Reject(false)
+        }
     }
 }
 
