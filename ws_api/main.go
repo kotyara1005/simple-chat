@@ -16,6 +16,13 @@ func createUUID() string {
 	return uuid.Must(uuid.NewV4()).String()
 }
 
+func failOnError(err error, msg string) {
+    if err != nil {
+            fmt.Printf("%s: %s", msg, err)
+            panic(fmt.Sprintf("%s: %s", msg, err))
+    }
+}
+
 // Group connections group
 type Group []*websocket.Conn
 
@@ -62,13 +69,6 @@ func (w *Worker) Broadcast(groupName string, message []byte) {
         }
     }
     w.groups[groupName] = group.RemoveNIL()
-}
-
-func failOnError(err error, msg string) {
-    if err != nil {
-            fmt.Printf("%s: %s", msg, err)
-            panic(fmt.Sprintf("%s: %s", msg, err))
-    }
 }
 
 func (w *Worker) declareAndConnect() (<-chan amqp.Delivery){
