@@ -19,7 +19,7 @@ func createUUID() string {
 // Group connections group
 type Group []*websocket.Conn
 
-// RemoveNIL
+// RemoveNIL remove nil pointers from group
 func (group Group) RemoveNIL() Group {
     current := 0
     for i := range group {
