@@ -73,13 +73,24 @@ func (w *Worker) Broadcast(groupName string, message []byte) {
 }
 
 func (w *Worker) declareAndConnect() (<-chan amqp.Delivery){
-    conn, err := amqp.Dial("amqp://guest:guest@localhost:5672/")
+    conn, err := amqp.Dial("amqp://guest:guest@rabbit:5672/")
     failOnError(err, "Failed to connect to RabbitMQ")
     // defer conn.Close()
 
     ch, err := conn.Channel()
     failOnError(err, "Failed to open a channel")
     // defer ch.Close()
+
+    err = ch.ExchangeDeclare(
+        "fanout_logs",
+        "fanout",
+        false,
+        true,
+        false,
+        false,
+        nil,
+    )
+    failOnError(err, "Failed to declare a queue")
 
     q, err := ch.QueueDeclare(
             w.id,  // name
@@ -158,7 +169,7 @@ var upgrader = websocket.Upgrader{
 }
 
 func main() {
-	indexFile, err := os.Open("ws_api/index.html")
+	indexFile, err := os.Open("index.html")
 	if err != nil {
 		fmt.Println(err)
 	}

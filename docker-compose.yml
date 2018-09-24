@@ -1,6 +1,20 @@
 version: "3"
 services:
+  rabbit:
+    image: rabbitmq:3-management
+    ports:
+      - "8080:15672"
+      - "5672:5672"
   api:
     build: ./api
     ports:
       - "8000:8000"
+  websocket:
+    build: ./ws_api
+    restart: always
+    ports:
+      - "3000:3000"
+    links:
+      - rabbit
+    depends_on:
+      - rabbit
