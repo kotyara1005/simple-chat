@@ -18,6 +18,7 @@ const ConfigFilePath = "config.json"
 
 // Config application config
 type Config struct {
+    ExchangeName string
 	Port      string
 	Debug     bool
 	RabbitURL string
@@ -113,7 +114,7 @@ func (w *Worker) declareAndConnect() <-chan amqp.Delivery {
 	// defer ch.Close()
 
 	err = ch.ExchangeDeclare(
-		"fanout_logs",
+		w.config.ExchangeName,
 		"fanout",
 		false,
 		true,
@@ -136,7 +137,7 @@ func (w *Worker) declareAndConnect() <-chan amqp.Delivery {
 	err = ch.QueueBind(
 		q.Name,
 		"",
-		"fanout_logs",
+		w.config.ExchangeName,
 		true,
 		nil,
 	)
