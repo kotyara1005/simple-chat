@@ -16,9 +16,11 @@ import (
 // ConfigFilePath path to json config file
 const ConfigFilePath = "config.json"
 
+// Config application config
 type Config struct {
     Port string
     Debug bool
+    RabbitUrl string
 }
 
 func readConfig() (*Config, error) {
@@ -66,12 +68,17 @@ func (group Group) RemoveNIL() Group {
 type Worker struct {
 	id     string
 	groups map[string]Group
-	lock   sync.Mutex
+    lock   sync.Mutex
+    config *Config
 }
 
 // NewWorker create new worker
-func NewWorker() *Worker {
-	return &Worker{groups: make(map[string]Group), id: createUUID()}
+func NewWorker(config *Config) *Worker {
+	return &Worker{
+        groups: make(map[string]Group), 
+        id: createUUID(),
+        config: config,
+    }
 }
 
 // Broadcast send message to all connections in group
@@ -97,7 +104,7 @@ func (w *Worker) Broadcast(groupName string, message []byte) {
 }
 
 func (w *Worker) declareAndConnect() <-chan amqp.Delivery {
-	conn, err := amqp.Dial("amqp://guest:guest@rabbit:5672/")
+	conn, err := amqp.Dial(w.config.RabbitUrl)
 	failOnError(err, "Failed to connect to RabbitMQ")
 	// defer conn.Close()
 
@@ -114,7 +121,7 @@ func (w *Worker) declareAndConnect() <-chan amqp.Delivery {
 		false,
 		nil,
 	)
-	failOnError(err, "Failed to declare a queue")
+	failOnError(err, "Failed to declare a exchange")
 
 	q, err := ch.QueueDeclare(
 		w.id,  // name
@@ -196,7 +203,7 @@ func main() {
     config, err := readConfig()
     failOnError(err, "Fail to read config")
 
-	worker := NewWorker()
+	worker := NewWorker(config)
     go worker.Work()
     
 	http.HandleFunc("/websocket", func(w http.ResponseWriter, r *http.Request) {
@@ -225,4 +232,3 @@ func main() {
 }
 
 // TODO safe exit
-// TODO config
