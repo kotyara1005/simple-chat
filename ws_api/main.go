@@ -18,9 +18,9 @@ const ConfigFilePath = "config.json"
 
 // Config application config
 type Config struct {
-    Port string
-    Debug bool
-    RabbitUrl string
+	Port      string
+	Debug     bool
+	RabbitURL string
 }
 
 func readConfig() (*Config, error) {
@@ -68,17 +68,17 @@ func (group Group) RemoveNIL() Group {
 type Worker struct {
 	id     string
 	groups map[string]Group
-    lock   sync.Mutex
-    config *Config
+	lock   sync.Mutex
+	config *Config
 }
 
 // NewWorker create new worker
 func NewWorker(config *Config) *Worker {
 	return &Worker{
-        groups: make(map[string]Group), 
-        id: createUUID(),
-        config: config,
-    }
+		groups: make(map[string]Group),
+		id:     createUUID(),
+		config: config,
+	}
 }
 
 // Broadcast send message to all connections in group
@@ -104,7 +104,7 @@ func (w *Worker) Broadcast(groupName string, message []byte) {
 }
 
 func (w *Worker) declareAndConnect() <-chan amqp.Delivery {
-	conn, err := amqp.Dial(w.config.RabbitUrl)
+	conn, err := amqp.Dial(w.config.RabbitURL)
 	failOnError(err, "Failed to connect to RabbitMQ")
 	// defer conn.Close()
 
@@ -200,12 +200,12 @@ var upgrader = websocket.Upgrader{
 }
 
 func main() {
-    config, err := readConfig()
-    failOnError(err, "Fail to read config")
+	config, err := readConfig()
+	failOnError(err, "Fail to read config")
 
 	worker := NewWorker(config)
-    go worker.Work()
-    
+	go worker.Work()
+
 	http.HandleFunc("/websocket", func(w http.ResponseWriter, r *http.Request) {
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
@@ -218,17 +218,17 @@ func main() {
 		name := r.URL.Query().Get("id")
 		fmt.Println(name)
 		worker.AddConn(name, conn)
-    })
-    if config.Debug {
-        indexFile, err := os.Open("index.html")
-        failOnError(err, "Fail to open file")
-        index, err := ioutil.ReadAll(indexFile)
-        failOnError(err, "Fail")
-        http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-            fmt.Fprintf(w, string(index))
-        })
-    }
-	http.ListenAndServe(":" + config.Port, nil)
+	})
+	if config.Debug {
+		indexFile, err := os.Open("index.html")
+		failOnError(err, "Fail to open file")
+		index, err := ioutil.ReadAll(indexFile)
+		failOnError(err, "Fail")
+		http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+			fmt.Fprintf(w, string(index))
+		})
+	}
+	http.ListenAndServe(":"+config.Port, nil)
 }
 
 // TODO safe exit

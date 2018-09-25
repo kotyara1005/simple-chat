@@ -1,5 +1,5 @@
 {
     "Port": "3000",
     "Debug": true,
-    "RabbitUrl": "amqp://guest:guest@rabbit:5672/"
+    "RabbitURL": "amqp://guest:guest@rabbit:5672/"
 }
