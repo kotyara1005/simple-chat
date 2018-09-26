@@ -1,7 +1,7 @@
 # -*- coding: UTF-8 -*-
 from flask import Flask
 
-from chat import auth, messages, front
+from chat import auth, messages, front, stream
 from chat.models import db
 from chat.utils import ApiError, handle_error
 from config import config
@@ -19,6 +19,7 @@ def create_app():
     # TODO move to postgres
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///test.db'
     db.init_app(app)
+    stream.streamer.init_app(app)
     return app
 
 

@@ -2,6 +2,7 @@ from flask import Blueprint, jsonify, request
 from marshmallow import fields
 from werkzeug.exceptions import MethodNotAllowed, Forbidden
 
+from chat.stream import streamer
 from chat.auth import current_user, user_id_to_kwargs, login_required
 from chat.models import db, Message, Conversation, Participant
 from chat.utils import (
@@ -91,7 +92,9 @@ class ConversationView(RESTView):
                 text=text,
             )
             db.session.add(message)
-        return jsonify(message.to_dict())
+        response = jsonify(message.to_dict())
+        streamer.send(response.body, {'groupName': conversation_id})
+        return response
 
     @classmethod
     @login_required()
