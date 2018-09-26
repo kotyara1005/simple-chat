@@ -23,10 +23,10 @@ class Stream:
     def exchange_name(self):
         return self.app.config.get('STREAM_EXCHANGE_NAME')
 
-    def init_app(self, app):
+    @staticmethod
+    def init_app(app):
         app.config.setdefault('STREAM_EXCHANGE_NAME', '')
         app.config.setdefault('STREAM_RABBIT_URL', None)
-        app.teardown_appcontext(self.teardown)
 
     def connect(self):
         self.connection = pika.BlockingConnection(
@@ -43,10 +43,6 @@ class Stream:
                 headers=headers
             ),
         )
-
-    def teardown(self):
-        # TODO implement
-        pass
 
 
 streamer = Stream()
