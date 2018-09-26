@@ -4,7 +4,7 @@ from flask import Flask
 from chat import auth, messages, front, stream
 from chat.models import db
 from chat.utils import ApiError, handle_error
-from config import config
+import config
 
 
 def create_app():
@@ -17,7 +17,6 @@ def create_app():
     app.register_blueprint(messages.create_blueprint(), url_prefix='/api')
     app.register_blueprint(front.bp, url_prefix='')
     # TODO move to postgres
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///test.db'
     db.init_app(app)
     stream.streamer.init_app(app)
     return app

@@ -3,13 +3,21 @@ import functools
 from datetime import datetime, timedelta
 
 import jwt
-from flask import Blueprint, abort, make_response, jsonify, request, g, redirect
+from flask import (
+    Blueprint,
+    abort,
+    make_response,
+    jsonify,
+    request,
+    g,
+    redirect,
+    current_app,
+)
 from marshmallow import fields
 from werkzeug.exceptions import MethodNotAllowed, Forbidden
 from werkzeug.security import check_password_hash
 from werkzeug.local import LocalProxy
 
-import config
 from chat.models import User, db
 from chat.utils import validate, RESTView, register_view
 
@@ -48,9 +56,12 @@ def setup_user():
     with contextlib.suppress(Exception):
         api_key = request.headers.get('Authorization')
         if api_key is None:
-            api_key = request.cookies.get(config.AUTH_COOKIE_NAME, '')
+            api_key = request.cookies.get(
+                current_app.config['AUTH_COOKIE_NAME'],
+                '',
+            )
         token = api_key.replace('JWT ', '', 1)
-        payload = jwt.decode(token, config.SECRET_KEY)
+        payload = jwt.decode(token, current_app.config['SECRET_KEY'])
         g.user = User.query.filter_by(id=payload['id']).first()
 
 
@@ -83,7 +94,7 @@ def login(name, password):
 
     response = jsonify({'token': token})
     response.set_cookie(
-        config.AUTH_COOKIE_NAME,
+        current_app.config['AUTH_COOKIE_NAME'],
         token,
         expires=expires.timestamp(),
     )
@@ -93,7 +104,7 @@ def login(name, password):
 
 def logout():
     response = make_response()
-    response.set_cookie(config.AUTH_COOKIE_NAME, '', expires=0)
+    response.set_cookie(current_app.config['AUTH_COOKIE_NAME'], '', expires=0)
     return response
 
 

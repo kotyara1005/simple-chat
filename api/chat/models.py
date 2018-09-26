@@ -2,6 +2,7 @@
 import datetime
 
 import jwt
+from flask import current_app
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash
 
@@ -31,7 +32,7 @@ class User(db.Model):
             'exp': expires,
             'id': str(self.id)
         }
-        return jwt.encode(payload, 'secret').decode('utf-8')
+        return jwt.encode(payload, current_app.config['SECRET_KEY']).decode('utf-8')
 
     def to_dict(self):
         return dict(
