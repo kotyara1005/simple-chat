@@ -3,11 +3,13 @@ DEBUG = True
 
 SQLALCHEMY_DATABASE_URI = 'sqlite:///test.db'
 
+AUTH_COOKIE_NAME = 'auth'
 SECRET_KEY = 'secret'
 
 STATIC_FOLDER = None
-STREAM_EXCHANGE_NAME = ''
-STREAM_RABBIT_URL = ''
+
+STREAM_EXCHANGE_NAME = 'MessageStream'
+STREAM_RABBIT_URL = 'amqp://guest:guest@rabbit:5672/'
 
 try:
     from local_config import *

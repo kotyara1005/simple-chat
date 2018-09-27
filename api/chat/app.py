@@ -1,4 +1,6 @@
 # -*- coding: UTF-8 -*-
+import functools
+
 from flask import Flask
 
 from chat import auth, messages, front, stream
@@ -19,14 +21,17 @@ def create_app():
     # TODO move to postgres
     db.init_app(app)
     stream.streamer.init_app(app)
+
+    app.before_first_request(functools.partial(db.create_all, app=app))
+
     return app
 
 
-if __name__ == '__main__':
-    app = create_app()
-    # db.drop_all(app=app)
-    db.create_all(app=app)
-    app.run(debug=True)
+# if __name__ == '__main__':
+#     app = create_app()
+#     # db.drop_all(app=app)
+#     db.create_all(app=app)
+#     app.run(debug=True)
 
 # TODO add tests
 # TODO add logout

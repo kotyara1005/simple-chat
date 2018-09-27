@@ -93,7 +93,7 @@ class ConversationView(RESTView):
             )
             db.session.add(message)
         response = jsonify(message.to_dict())
-        streamer.send(response.body, {'groupName': conversation_id})
+        streamer.send(response.get_data(), {'groupName': conversation_id})
         return response
 
     @classmethod
