@@ -13,11 +13,23 @@ services:
     ports:
       - "8080:15672"
       - "5672:5672"
+  chat_postgres:
+    image: postgres:10-alpine
+    environment:
+      POSTGRES_PASSWORD: password
+      POSTGRES_USER: user
+      POSTGRES_DB: chat
   api:
     build: ./api
     restart: always
     ports:
       - "8000:8000"
+    links:
+      - rabbit
+      - chat_postgres
+    depends_on:
+      - rabbit
+      - chat_postgres
   websocket:
     build: ./ws_api
     restart: always

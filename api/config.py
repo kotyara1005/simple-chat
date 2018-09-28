@@ -1,7 +1,7 @@
 # -*- coding: UTF-8 -*-
 DEBUG = True
 
-SQLALCHEMY_DATABASE_URI = 'sqlite:///test.db'
+SQLALCHEMY_DATABASE_URI = 'postgresql+psycopg2://user:password@chat_postgres:5432/chat'
 
 AUTH_COOKIE_NAME = 'auth'
 SECRET_KEY = 'secret'

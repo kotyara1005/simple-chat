@@ -6,3 +6,4 @@ sqlalchemy
 marshmallow
 gunicorn
 pika
+psycopg2
