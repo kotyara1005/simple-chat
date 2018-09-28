@@ -178,6 +178,7 @@ func (w *Worker) Work() {
 			w.Broadcast(name, msg.Body)
 			msg.Ack(false)
 		default:
+		    fmt.Println("Error group name has not type string")
 			msg.Reject(false)
 		}
 	}
