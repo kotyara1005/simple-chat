@@ -1,6 +1,5 @@
 import contextlib
 import functools
-from datetime import datetime, timedelta
 
 import jwt
 from flask import (
@@ -15,7 +14,6 @@ from flask import (
 )
 from marshmallow import fields
 from werkzeug.exceptions import MethodNotAllowed, Forbidden
-from werkzeug.security import check_password_hash
 from werkzeug.local import LocalProxy
 
 from chat.models import User, db
@@ -65,6 +63,14 @@ def setup_user():
         g.user = User.query.filter_by(id=payload['id']).first()
 
 
+def set_auth_cookie(response, value, expires):
+    response.set_cookie(
+        current_app.config['AUTH_COOKIE_NAME'],
+        value,
+        expires=expires.timestamp(),
+    )
+
+
 @validate(
     name=fields.String(required=True),
     password=fields.String(required=True),
@@ -85,20 +91,11 @@ def register(name, password):
     password=fields.String(required=True),
 )
 def login(name, password):
-    user = User.query.filter_by(name=name).first()
-    if not (user and check_password_hash(user.password, password)):
-        abort(400, 'User not found')
-
-    expires = datetime.utcnow() + timedelta(days=1)
-    token = user.create_token(expires)
-
+    token, expires = User.login(name, password)
+    if token is None:
+        abort(401, "Wrong credentials")
     response = jsonify({'token': token})
-    response.set_cookie(
-        current_app.config['AUTH_COOKIE_NAME'],
-        token,
-        expires=expires.timestamp(),
-    )
-    # TODO add redirect
+    set_auth_cookie(response, token, expires)
     return response
 
 

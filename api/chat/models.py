@@ -4,7 +4,7 @@ import datetime
 import jwt
 from flask import current_app
 from flask_sqlalchemy import SQLAlchemy
-from werkzeug.security import generate_password_hash
+from werkzeug.security import generate_password_hash, check_password_hash
 
 
 db = SQLAlchemy()
@@ -16,6 +16,15 @@ class User(db.Model):
     password = db.Column(db.String())
     email = db.Column(db.String())
     conversations = db.relationship("Participant", back_populates="user")
+
+    @classmethod
+    def login(cls, name, password):
+        user = cls.query.filter_by(name=name).first()
+        if not (user and check_password_hash(user.password, password)):
+            return None, None
+
+        expires = datetime.datetime.utcnow() + datetime.timedelta(days=1)
+        return user.create_token(expires), expires
 
     def __str__(self):
         return self.name
