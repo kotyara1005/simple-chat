@@ -10,4 +10,4 @@ EXPOSE 8000
 
 ENV NAME Api
 
-CMD ["gunicorn", "-w", "1", "-b", "0.0.0.0:8000", "chat.wsgi"]
+CMD ["./wait-for-it.sh", "chat_postgres:5432", "-s", "-t", "30", "--", "gunicorn", "-w", "1", "-b", "0.0.0.0:8000", "chat.wsgi"]

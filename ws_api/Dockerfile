@@ -7,4 +7,4 @@ RUN go get -d -v && go install
 
 EXPOSE 3000
 
-CMD app
+CMD ["./wait-for-it.sh", "rabbit:5672", "-s", "-t", "30", "--", "app"]
