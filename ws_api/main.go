@@ -198,6 +198,10 @@ func (w *Worker) AddConn(groupName string, conn *websocket.Conn) {
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
+	CheckOrigin: func(r *http.Request) bool {
+		// allow all connections
+		return true
+	},
 }
 
 func main() {
