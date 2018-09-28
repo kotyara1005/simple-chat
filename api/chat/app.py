@@ -18,7 +18,6 @@ def create_app():
     app.before_request(auth.setup_user)
     app.register_blueprint(messages.create_blueprint(), url_prefix='/api')
     app.register_blueprint(front.bp, url_prefix='')
-    # TODO move to postgres
     db.init_app(app)
     stream.streamer.init_app(app)
 
@@ -26,12 +25,6 @@ def create_app():
 
     return app
 
-
-# if __name__ == '__main__':
-#     app = create_app()
-#     # db.drop_all(app=app)
-#     db.create_all(app=app)
-#     app.run(debug=True)
-
 # TODO add tests
 # TODO add logout
+# TODO add indexes

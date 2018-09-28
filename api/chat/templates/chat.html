@@ -35,7 +35,19 @@
 
     <script>
         const chatId = {{ pk }};
-        
+        function startWebsocket()
+        {
+            let ws = new WebSocket("ws://" + location.host + "/wsapi/stream?id=" + chatId);
+
+            ws.onmessage = function (event) {
+                console.log(event);
+                render(JSON.parse(event.data));
+            };
+
+            ws.onclose = function() {
+                console.log("Connection closed");
+            };
+        }
         function render(data) {
             let tmpl = $.templates("#message");
             $("#message-list").append(tmpl.render(data));
@@ -56,20 +68,18 @@
         );
         const timeout = 1000;
         function receiveMessages() {
-            $.ajax({
+            return $.ajax({
                 method: "GET",
                 url: "/api/conversation/" + chatId + "/message",
                 ifModified: true,
-                success: function(data, textStatus, request){
-                    for (let i=0; i<data.length; i++) {
+                timeout: timeout,
+                success: function (data, textStatus, request) {
+                    for (let i = 0; i < data.length; i++) {
                         render(data[i]);
                     }
+                    startWebsocket();
                 }
-            }).always(
-                function () {
-                    setTimeout(receiveMessages, timeout);
-                }
-            )
+            });
         }
         receiveMessages();
     </script>
