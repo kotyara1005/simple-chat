@@ -2,8 +2,8 @@ from flask import Blueprint, jsonify, request
 from marshmallow import fields
 from werkzeug.exceptions import MethodNotAllowed, Forbidden
 
-from chat.stream import streamer
-from chat.auth import current_user, user_id_to_kwargs, login_required
+from chat.api.stream import streamer
+from chat.api.auth import current_user, user_id_to_kwargs, login_required
 from chat.models import db, Message, Conversation, Participant
 from chat.utils import (
     RESTView,

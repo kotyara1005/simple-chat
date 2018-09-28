@@ -1,6 +1,6 @@
 from flask import Blueprint, redirect, render_template, url_for, request, abort
 
-from chat import auth
+from chat.api import auth
 from chat.models import User
 
 bp = Blueprint(__name__, __name__, template_folder='templates')
@@ -32,7 +32,12 @@ def login():
 @bp.route('/register', methods=('GET', 'POST'))
 def register():
     if request.method == 'POST':
-        auth.register()
+        user = User.register(
+            request.json['name'],
+            request.json['password'],
+        )
+        if user is None:
+            return abort(400)
         return redirect(url_for('chat.front.login'))
     return render_template('registration.html')
 
@@ -47,3 +52,10 @@ def chat(pk):
 @auth.login_required()
 def chat_list():
     return render_template('list.html')
+
+
+@bp.route('/logout', methods=('POST',))
+def logout():
+    response = redirect(url_for('chat.front.login'))
+    auth.clear_auth_cookie(response)
+    return response

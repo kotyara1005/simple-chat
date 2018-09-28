@@ -3,10 +3,11 @@ import functools
 
 from flask import Flask
 
-from chat import auth, messages, front, stream
+import config
+from chat.api import auth, stream
+from chat.views import front, message, user
 from chat.models import db
 from chat.utils import ApiError, handle_error
-import config
 
 
 def create_app():
@@ -14,9 +15,9 @@ def create_app():
     app.config.from_object(config)
     app.debug = config.DEBUG
     app.errorhandler(ApiError)(handle_error)
-    app.register_blueprint(auth.create_blueprint(), url_prefix='/api')
+    app.register_blueprint(user.create_blueprint(), url_prefix='/api')
     app.before_request(auth.setup_user)
-    app.register_blueprint(messages.create_blueprint(), url_prefix='/api')
+    app.register_blueprint(message.create_blueprint(), url_prefix='/api')
     app.register_blueprint(front.bp, url_prefix='')
     db.init_app(app)
     stream.streamer.init_app(app)

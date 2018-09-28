@@ -26,6 +26,17 @@ class User(db.Model):
         expires = datetime.datetime.utcnow() + datetime.timedelta(days=1)
         return user.create_token(expires), expires
 
+    @classmethod
+    def register(cls, name, password):
+        try:
+            user = User(name=name)
+            user.set_password(password)
+            db.session.add(user)
+            db.session.commit()
+        except:
+            return None
+        return user
+
     def __str__(self):
         return self.name
 
