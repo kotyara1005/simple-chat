@@ -2,5 +2,7 @@
     "ExchangeName": "MessageStream",
     "Port": "3000",
     "Debug": true,
-    "RabbitURL": "amqp://guest:guest@rabbit:5672/"
+    "RabbitURL": "amqp://guest:guest@rabbit:5672/",
+    "AuthSecretKey": "secret",
+    "AuthCookieName": "auth"
 }
