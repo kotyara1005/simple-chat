@@ -8,10 +8,10 @@ import (
 	"os"
 	"sync"
 
+	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/gorilla/websocket"
 	"github.com/satori/go.uuid"
-    "github.com/streadway/amqp"
-    jwt "github.com/dgrijalva/jwt-go"
+	"github.com/streadway/amqp"
 )
 
 // ConfigFilePath path to json config file
@@ -19,12 +19,12 @@ const ConfigFilePath = "config.json"
 
 // Config application config
 type Config struct {
-    ExchangeName string
-	Port      string
-	Debug     bool
-    RabbitURL string
-    AuthSecretKey string
-    AuthCookieName string
+	ExchangeName   string
+	Port           string
+	Debug          bool
+	RabbitURL      string
+	AuthSecretKey  string
+	AuthCookieName string
 }
 
 func readConfig() (*Config, error) {
@@ -181,7 +181,7 @@ func (w *Worker) Work() {
 			w.Broadcast(name, msg.Body)
 			msg.Ack(false)
 		default:
-		    fmt.Println("Error group name has not type string")
+			fmt.Println("Error group name has not type string")
 			msg.Reject(false)
 		}
 	}
@@ -200,27 +200,27 @@ func (w *Worker) AddConn(groupName string, conn *websocket.Conn) {
 }
 
 var (
-    upgrader = websocket.Upgrader{
-        ReadBufferSize:  1024,
-        WriteBufferSize: 1024,
-        CheckOrigin: func(r *http.Request) bool {
-            // allow all connections
-            return true
-        },
-    }
-    jwtParser = jwt.Parser{}
+	upgrader = websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+		CheckOrigin: func(r *http.Request) bool {
+			// allow all connections
+			return true
+		},
+	}
+	jwtParser = jwt.Parser{}
 )
 
-func validateToken(token, secret string) (*jwt.Token, error)  {
-    return jwtParser.Parse(
-        token,
-        func(token *jwt.Token) (interface{}, error) {
-            if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-                return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
-            }
-            return secret, nil
-        },
-    )
+func validateToken(token, secret string) (*jwt.Token, error) {
+	return jwtParser.Parse(
+		token,
+		func(token *jwt.Token) (interface{}, error) {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
+			}
+			return secret, nil
+		},
+	)
 }
 
 func main() {
@@ -231,27 +231,27 @@ func main() {
 	go worker.Work()
 
 	http.HandleFunc("/wsapi/stream", func(w http.ResponseWriter, r *http.Request) {
-        token, err := r.Cookie(config.AuthCookieName)
-		if err != nil {
-            fmt.Println(err)
-            w.WriteHeader(http.StatusUnauthorized)
-			return
-        }
-        _, err = validateToken(token.Value, config.AuthSecretKey)
+		token, err := r.Cookie(config.AuthCookieName)
 		if err != nil {
 			fmt.Println(err)
-            w.WriteHeader(http.StatusUnauthorized)
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		_, err = validateToken(token.Value, config.AuthSecretKey)
+		if err != nil {
+			fmt.Println(err)
+			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
 
-        name := r.URL.Query().Get("id")
-        if name == "" {
+		name := r.URL.Query().Get("id")
+		if name == "" {
 			fmt.Println("No id provided")
-            w.WriteHeader(http.StatusBadRequest)
+			w.WriteHeader(http.StatusBadRequest)
 			return
-        }
-        fmt.Println(name)
-        
+		}
+		fmt.Println(name)
+
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			fmt.Println(err)
