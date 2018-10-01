@@ -34,14 +34,6 @@ def login_required(redirect_to=None):
     return decorator
 
 
-def user_id_to_kwargs(func):
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        kwargs['user_id'] = current_user.id
-        return func(*args, **kwargs)
-    return wrapper
-
-
 def setup_user():
     g.user = None
     with contextlib.suppress(Exception):

@@ -3,7 +3,7 @@ from marshmallow import fields
 from werkzeug.exceptions import MethodNotAllowed, Forbidden
 
 from chat.api.stream import streamer
-from chat.api.auth import current_user, user_id_to_kwargs, login_required
+from chat.api.auth import current_user, login_required
 from chat.models import db, Message, Conversation, Participant
 from chat.utils import (
     RESTView,
@@ -28,8 +28,8 @@ class ConversationView(RESTView):
 
     @validate()
     @login_required()
-    @user_id_to_kwargs
     def create(self, user_id, **kwargs):
+        user_id = current_user.id
         with CommitOnSuccess():
             conversation = self.model(user_id=user_id, name='test', **kwargs)
             db.session.add(conversation)
