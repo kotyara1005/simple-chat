@@ -4,7 +4,7 @@ DEBUG = True
 SQLALCHEMY_DATABASE_URI = 'postgresql+psycopg2://user:password@chat_postgres:5432/chat'
 
 AUTH_COOKIE_NAME = 'auth'
-SECRET_KEY = 'secret'
+AUTH_SECRET_KEY = 'secret'
 
 STATIC_FOLDER = None
 

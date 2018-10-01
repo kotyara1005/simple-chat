@@ -44,7 +44,7 @@ def setup_user():
                 '',
             )
         token = api_key.replace('JWT ', '', 1)
-        payload = jwt.decode(token, current_app.config['SECRET_KEY'])
+        payload = jwt.decode(token, current_app.config['AUTH_SECRET_KEY'])
         g.user = User.query.filter_by(id=payload['id']).first()
 
 

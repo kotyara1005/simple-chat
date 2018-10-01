@@ -52,7 +52,7 @@ class User(db.Model):
             'exp': expires,
             'id': str(self.id)
         }
-        return jwt.encode(payload, current_app.config['SECRET_KEY']).decode('utf-8')
+        return jwt.encode(payload, current_app.config['AUTH_SECRET_KEY']).decode('utf-8')
 
     def to_dict(self):
         return dict(
