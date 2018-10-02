@@ -6,7 +6,8 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
-	"sync"
+    "sync"
+    "strconv"
 
 	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/gorilla/websocket"
@@ -68,12 +69,129 @@ func (group Group) RemoveNIL() Group {
 	return group[:current]
 }
 
+type Queue struct {
+    url string
+    exchangeName string
+    queueName string
+    conn *amqp.Connection
+    channel *amqp.Channel
+    queue *amqp.Queue
+}
+
+func NewQueue(url, exchangeName, queueName string) (*Queue, error) {
+    queue := Queue{
+        url:url, 
+        exchangeName:exchangeName, 
+        queueName:queueName,
+    }
+    err := queue.Connect()
+    if err != nil {
+        return nil, err
+    }
+    err = queue.Declare()
+    if err != nil {
+        return nil, err
+    }
+
+    return &queue, nil
+}
+
+func (q *Queue) Connect() error {
+	conn, err := amqp.Dial(q.url)
+	if err != nil {
+        return err
+    }
+
+	ch, err := conn.Channel()
+	if err != nil {
+        return err
+    }
+
+    q.conn = conn
+    q.channel = ch
+    return nil
+}
+
+func (q *Queue) Close() {
+    defer q.conn.Close()
+    defer q.channel.Close()
+}
+
+func (q *Queue) Declare() error {
+	err := q.channel.ExchangeDeclare(
+		q.exchangeName,
+		"topic",
+		false,
+		true,
+		false,
+		false,
+		nil,
+	)
+	if err != nil {
+        return err
+    }
+
+	queue, err := q.channel.QueueDeclare(
+		q.queueName,  // name
+		true,  // durable
+		true,  // delete when unused
+		false, // exclusive
+		false, // no-wait
+		nil,   // arguments
+	)
+	if err != nil {
+        return err
+    }
+    q.queue = &queue
+    return nil
+}
+
+func (q *Queue) Bind(UserId int) error {
+    err := q.channel.QueueBind(
+		q.queue.Name,
+		"*." + strconv.Itoa(UserId),
+		q.exchangeName,
+		true,
+		nil,
+	)
+	if err != nil {
+        return err
+    }
+    return nil
+}
+
+func (q *Queue) Consume() (<-chan amqp.Delivery, error) {
+    err := q.channel.Qos(
+		1,     // prefetch count
+		0,     // prefetch size
+		false, // global
+	)
+	if err != nil {
+        return nil, err
+    }
+
+	msgs, err := q.channel.Consume(
+		q.queue.Name, // queue
+		"",     // consumer
+		false,  // auto-ack
+		false,  // exclusive
+		false,  // no-local
+		false,  // no-wait
+		nil,    // args
+    )
+    if err != nil {
+        return nil, err
+    }
+	return msgs, nil
+}
+
 // Worker it works
 type Worker struct {
 	id     string
 	groups map[string]Group
 	lock   sync.Mutex
-	config *Config
+    config *Config
+    queue *Queue
 }
 
 // NewWorker create new worker
@@ -105,65 +223,6 @@ func (w *Worker) Broadcast(groupName string, message []byte) {
 		}
 	}
 	w.groups[groupName] = group.RemoveNIL()
-}
-
-func (w *Worker) declareAndConnect() <-chan amqp.Delivery {
-	conn, err := amqp.Dial(w.config.RabbitURL)
-	failOnError(err, "Failed to connect to RabbitMQ")
-	// defer conn.Close()
-
-	ch, err := conn.Channel()
-	failOnError(err, "Failed to open a channel")
-	// defer ch.Close()
-
-	err = ch.ExchangeDeclare(
-		w.config.ExchangeName,
-		"fanout",
-		false,
-		true,
-		false,
-		false,
-		nil,
-	)
-	failOnError(err, "Failed to declare a exchange")
-
-	q, err := ch.QueueDeclare(
-		w.id,  // name
-		true,  // durable
-		true,  // delete when unused
-		false, // exclusive
-		false, // no-wait
-		nil,   // arguments
-	)
-	failOnError(err, "Failed to declare a queue")
-
-	err = ch.QueueBind(
-		q.Name,
-		"",
-		w.config.ExchangeName,
-		true,
-		nil,
-	)
-	failOnError(err, "Failed on bind")
-
-	err = ch.Qos(
-		1,     // prefetch count
-		0,     // prefetch size
-		false, // global
-	)
-	failOnError(err, "Failed to set QoS")
-
-	msgs, err := ch.Consume(
-		q.Name, // queue
-		"",     // consumer
-		false,  // auto-ack
-		false,  // exclusive
-		false,  // no-local
-		false,  // no-wait
-		nil,    // args
-	)
-	failOnError(err, "Failed to register a consumer")
-	return msgs
 }
 
 // Work just do your work
@@ -211,6 +270,11 @@ var (
 	jwtParser = jwt.Parser{}
 )
 
+type AuthTokenClaims struct {
+    UserID int `json:"id"`
+    jwt.StandardClaims
+}
+
 func validateToken(token, secret string) (*jwt.Token, error) {
 	return jwtParser.Parse(
 		token,
@@ -231,26 +295,27 @@ func main() {
 	go worker.Work()
 
 	http.HandleFunc("/wsapi/stream", func(w http.ResponseWriter, r *http.Request) {
-		token, err := r.Cookie(config.AuthCookieName)
+		authCookie, err := r.Cookie(config.AuthCookieName)
 		if err != nil {
 			fmt.Println(err)
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
-		_, err = validateToken(token.Value, config.AuthSecretKey)
-		if err != nil {
+		token, err := validateToken(authCookie.Value, config.AuthSecretKey)
+		if err != nil || !token.Valid {
 			fmt.Println(err)
 			w.WriteHeader(http.StatusUnauthorized)
 			return
-		}
+        }
 
-		name := r.URL.Query().Get("id")
-		if name == "" {
-			fmt.Println("No id provided")
-			w.WriteHeader(http.StatusBadRequest)
+        claims, ok := token.Claims.(*AuthTokenClaims)
+        if !ok {
+			fmt.Println(err)
+			w.WriteHeader(http.StatusUnauthorized)
 			return
-		}
-		fmt.Println(name)
+        }
+
+		fmt.Println(claims.UserID)
 
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
@@ -259,7 +324,7 @@ func main() {
 		}
 		fmt.Println("Client subscribed")
 
-		worker.AddConn(name, conn)
+		worker.AddConn(claims.UserID, conn)
 	})
 	if config.Debug {
 		indexFile, err := os.Open("index.html")
