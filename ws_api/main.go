@@ -53,6 +53,7 @@ func failOnError(err error, msg string) {
 	}
 }
 
+// Connections websocket connections slice
 type Connections []*websocket.Conn
 
 // Group connections group
@@ -75,6 +76,7 @@ func (conns Connections) RemoveNIL() Connections {
 	return conns[:current]
 }
 
+// Queue class
 type Queue struct {
 	url          string
 	exchangeName string
@@ -84,6 +86,7 @@ type Queue struct {
 	queue        *amqp.Queue
 }
 
+// NewQueue creates new Queue instance
 func NewQueue(url, exchangeName, queueName string) (*Queue, error) {
 	queue := Queue{
 		url:          url,
@@ -102,6 +105,7 @@ func NewQueue(url, exchangeName, queueName string) (*Queue, error) {
 	return &queue, nil
 }
 
+// Connect create connection and channel
 func (q *Queue) Connect() error {
 	conn, err := amqp.Dial(q.url)
 	if err != nil {
@@ -118,15 +122,17 @@ func (q *Queue) Connect() error {
 	return nil
 }
 
+// Close channel and dial connection
 func (q *Queue) Close() {
 	defer q.conn.Close()
 	defer q.channel.Close()
 }
 
+// Declare creates exchange and queue for worker
 func (q *Queue) Declare() error {
 	err := q.channel.ExchangeDeclare(
 		q.exchangeName,
-		"topic",
+		"headers",
 		false,
 		true,
 		false,
@@ -152,13 +158,17 @@ func (q *Queue) Declare() error {
 	return nil
 }
 
-func (q *Queue) Bind(UserId int) error {
+// Bind binds exchange and queue for accept user's messages
+func (q *Queue) Bind(UserID int) error {
 	err := q.channel.QueueBind(
 		q.queue.Name,
-		"*."+strconv.Itoa(UserId),
+		"",
 		q.exchangeName,
 		true,
-		nil,
+		amqp.Table{
+			"UserID:" + strconv.Itoa(UserID): true,
+			"x-match":                        "any",
+		},
 	)
 	if err != nil {
 		return err
@@ -166,9 +176,10 @@ func (q *Queue) Bind(UserId int) error {
 	return nil
 }
 
+// Consume starts messages consuming
 func (q *Queue) Consume() (<-chan amqp.Delivery, error) {
 	err := q.channel.Qos(
-		1,     // prefetch count
+		10,    // prefetch count
 		0,     // prefetch size
 		false, // global
 	)
@@ -216,26 +227,42 @@ func NewWorker(config *Config) (*Worker, error) {
 }
 
 // Broadcast send message to all connections in group
-func (w *Worker) Broadcast(groupID int, message []byte) {
+func (w *Worker) Broadcast(groupIDs []int, message []byte) {
 	w.lock.Lock()
-	group, prs := w.groups[groupID]
-	w.lock.Unlock()
-	if !prs {
-		return
-	}
-	group.Lock.Lock()
-	defer group.Lock.Unlock()
-	for i, conn := range group.Connections {
-		if conn == nil {
-			continue
+	defer w.lock.Unlock()
+	for _, groupID := range groupIDs {
+		group, prs := w.groups[groupID]
+		if !prs {
+			return
 		}
-		err := conn.WriteMessage(websocket.TextMessage, message)
+		// TODO refactor use chan and Group worker
+		go func() {
+			group.Lock.Lock()
+			defer group.Lock.Unlock()
+			for i, conn := range group.Connections {
+				if conn == nil {
+					continue
+				}
+				err := conn.WriteMessage(websocket.TextMessage, message)
+				if err != nil {
+					group.Connections[i] = nil
+					defer conn.Close()
+				}
+			}
+			group.Connections = group.Connections.RemoveNIL()
+		}()
+	}
+}
+
+func parseUserIDs(value string) (result []int, err error) {
+	for _, userID := range strings.Split(value, ",") {
+		id, err := strconv.Atoi(userID)
 		if err != nil {
-			group.Connections[i] = nil
-			defer conn.Close()
+			return nil, err
 		}
+		result = append(result, id)
 	}
-	group.Connections = group.Connections.RemoveNIL()
+	return result, nil
 }
 
 // Work just do your work
@@ -243,29 +270,32 @@ func (w *Worker) Work() {
 	messages, err := w.Queue.Consume()
 	failOnError(err, "Fail to start consumer")
 	for msg := range messages {
-		routingKeys := strings.Split(msg.RoutingKey, ".")
-		if len(routingKeys) != 2 {
+		value, prs := msg.Headers["UserIDs"]
+		if !prs {
 			fmt.Println("Error group name has not type string")
 			msg.Reject(false)
 			continue
 		}
-		userId, err := strconv.Atoi(routingKeys[len(routingKeys)-1])
+
+		UserIDs, err := parseUserIDs(value.(string))
 		if err != nil {
 			fmt.Println("Error group name has not type string")
 			msg.Reject(false)
 			continue
 		}
 
-		w.Broadcast(userId, msg.Body)
-		msg.Ack(false)
+		go func(UserIDs []int, msg amqp.Delivery) {
+			w.Broadcast(UserIDs, msg.Body)
+			msg.Ack(false)
+		}(UserIDs, msg)
 	}
 }
 
 // AddConn add connection
-func (w *Worker) AddConn(UserId int, conn *websocket.Conn) {
+func (w *Worker) AddConn(UserID int, conn *websocket.Conn) {
 	defer w.lock.Unlock()
 	w.lock.Lock()
-	group, prs := w.groups[UserId]
+	group, prs := w.groups[UserID]
 	if prs {
 		group.Lock.Lock()
 		defer group.Lock.Unlock()
@@ -287,6 +317,7 @@ var (
 	jwtParser = jwt.Parser{}
 )
 
+// AuthTokenClaims extended token claims
 type AuthTokenClaims struct {
 	UserID int `json:"id"`
 	jwt.StandardClaims
@@ -357,3 +388,4 @@ func main() {
 }
 
 // TODO safe exit
+// TODO unbind
