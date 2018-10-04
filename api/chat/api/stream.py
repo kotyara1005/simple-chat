@@ -30,14 +30,14 @@ class Stream:
         self.channel = self.connection.channel()
         self.channel.exchange_declare(
             exchange=self.exchange_name,
-            exchange_type='fanout',
+            exchange_type='headers',
             auto_delete=True,
         )
 
     def send(self, body, headers):
         return self.channel.basic_publish(
             exchange=self.exchange_name,
-            routing_key='anonymous.info',
+            routing_key='',
             body=body,
             properties=pika.BasicProperties(
                 headers=headers

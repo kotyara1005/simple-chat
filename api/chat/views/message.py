@@ -93,7 +93,14 @@ class ConversationView(RESTView):
             )
             db.session.add(message)
         response = jsonify(message.to_dict())
-        streamer.send(response.get_data(), {'groupName': str(conversation_id)})
+        headers = {
+            'UserID:' + str(participant.user_id): True
+            for participant in conversation.participants
+        }
+        headers['UserIDs'] = ','.join(
+            participant.user_id for participant in conversation.participants
+        )
+        streamer.send(response.get_data(), headers)
         return response
 
     @classmethod
