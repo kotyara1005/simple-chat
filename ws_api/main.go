@@ -6,8 +6,11 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strconv"
+	"strings"
 	"sync"
 
+	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/gorilla/websocket"
 	"github.com/satori/go.uuid"
 	"github.com/streadway/amqp"
@@ -18,10 +21,12 @@ const ConfigFilePath = "config.json"
 
 // Config application config
 type Config struct {
-    ExchangeName string
-	Port      string
-	Debug     bool
-	RabbitURL string
+	ExchangeName   string
+	Port           string
+	Debug          bool
+	RabbitURL      string
+	AuthSecretKey  string
+	AuthCookieName string
 }
 
 func readConfig() (*Config, error) {
@@ -48,182 +53,327 @@ func failOnError(err error, msg string) {
 	}
 }
 
-// Group connections group
-type Group []*websocket.Conn
+// Connections websocket connections slice
+type Connections []*websocket.Conn
 
-// RemoveNIL remove nil pointers from group
-func (group Group) RemoveNIL() Group {
+// Group connections group
+type Group struct {
+	Connections Connections
+	Lock        sync.Mutex
+}
+
+// RemoveNIL remove nil pointers from connections
+func (conns Connections) RemoveNIL() Connections {
 	current := 0
-	for i := range group {
-		if group[i] != nil {
+	for i := range conns {
+		if conns[i] != nil {
 			if current != i {
-				group[current] = group[i]
+				conns[current] = conns[i]
 			}
 			current++
 		}
 	}
-	return group[:current]
+	return conns[:current]
+}
+
+// Queue class
+type Queue struct {
+	url          string
+	exchangeName string
+	queueName    string
+	conn         *amqp.Connection
+	channel      *amqp.Channel
+	queue        *amqp.Queue
+}
+
+// NewQueue creates new Queue instance
+func NewQueue(url, exchangeName, queueName string) (*Queue, error) {
+	queue := Queue{
+		url:          url,
+		exchangeName: exchangeName,
+		queueName:    queueName,
+	}
+	err := queue.Connect()
+	if err != nil {
+		return nil, err
+	}
+	err = queue.Declare()
+	if err != nil {
+		return nil, err
+	}
+
+	return &queue, nil
+}
+
+// Connect create connection and channel
+func (q *Queue) Connect() error {
+	conn, err := amqp.Dial(q.url)
+	if err != nil {
+		return err
+	}
+
+	ch, err := conn.Channel()
+	if err != nil {
+		return err
+	}
+
+	q.conn = conn
+	q.channel = ch
+	return nil
+}
+
+// Close channel and dial connection
+func (q *Queue) Close() {
+	defer q.conn.Close()
+	defer q.channel.Close()
+}
+
+// Declare creates exchange and queue for worker
+func (q *Queue) Declare() error {
+	err := q.channel.ExchangeDeclare(
+		q.exchangeName,
+		"headers",
+		false,
+		true,
+		false,
+		false,
+		nil,
+	)
+	if err != nil {
+		return err
+	}
+
+	queue, err := q.channel.QueueDeclare(
+		q.queueName, // name
+		true,        // durable
+		true,        // delete when unused
+		false,       // exclusive
+		false,       // no-wait
+		nil,         // arguments
+	)
+	if err != nil {
+		return err
+	}
+	q.queue = &queue
+	return nil
+}
+
+// Bind binds exchange and queue for accept user's messages
+func (q *Queue) Bind(UserID int) error {
+	err := q.channel.QueueBind(
+		q.queue.Name,
+		"",
+		q.exchangeName,
+		true,
+		amqp.Table{
+			"UserID:" + strconv.Itoa(UserID): true,
+			"x-match":                        "any",
+		},
+	)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// Consume starts messages consuming
+func (q *Queue) Consume() (<-chan amqp.Delivery, error) {
+	err := q.channel.Qos(
+		10,    // prefetch count
+		0,     // prefetch size
+		false, // global
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	msgs, err := q.channel.Consume(
+		q.queue.Name, // queue
+		"",           // consumer
+		false,        // auto-ack
+		false,        // exclusive
+		false,        // no-local
+		false,        // no-wait
+		nil,          // args
+	)
+	if err != nil {
+		return nil, err
+	}
+	return msgs, nil
 }
 
 // Worker it works
 type Worker struct {
 	id     string
-	groups map[string]Group
+	groups map[int]Group
 	lock   sync.Mutex
 	config *Config
+	Queue  *Queue
 }
 
 // NewWorker create new worker
-func NewWorker(config *Config) *Worker {
-	return &Worker{
-		groups: make(map[string]Group),
-		id:     createUUID(),
-		config: config,
+func NewWorker(config *Config) (*Worker, error) {
+	id := createUUID()
+	queue, err := NewQueue(config.RabbitURL, config.ExchangeName, id)
+	if err != nil {
+		return nil, err
 	}
+	return &Worker{
+		groups: make(map[int]Group),
+		id:     id,
+		config: config,
+		Queue:  queue,
+	}, nil
 }
 
 // Broadcast send message to all connections in group
-func (w *Worker) Broadcast(groupName string, message []byte) {
-	defer w.lock.Unlock()
+func (w *Worker) Broadcast(groupIDs []int, message []byte) {
 	w.lock.Lock()
-	group, prs := w.groups[groupName]
-	if !prs {
-		return
-	}
-	for i, conn := range group {
-		if conn == nil {
-			continue
+	defer w.lock.Unlock()
+	for _, groupID := range groupIDs {
+		group, prs := w.groups[groupID]
+		if !prs {
+			return
 		}
-		// TODO concurent write
-		err := conn.WriteMessage(websocket.TextMessage, message)
-		if err != nil {
-			group[i] = nil
-			defer conn.Close()
-		}
+		// TODO refactor use chan and Group worker
+		go func() {
+			group.Lock.Lock()
+			defer group.Lock.Unlock()
+			for i, conn := range group.Connections {
+				if conn == nil {
+					continue
+				}
+				err := conn.WriteMessage(websocket.TextMessage, message)
+				if err != nil {
+					group.Connections[i] = nil
+					defer conn.Close()
+				}
+			}
+			group.Connections = group.Connections.RemoveNIL()
+		}()
 	}
-	w.groups[groupName] = group.RemoveNIL()
 }
 
-func (w *Worker) declareAndConnect() <-chan amqp.Delivery {
-	conn, err := amqp.Dial(w.config.RabbitURL)
-	failOnError(err, "Failed to connect to RabbitMQ")
-	// defer conn.Close()
-
-	ch, err := conn.Channel()
-	failOnError(err, "Failed to open a channel")
-	// defer ch.Close()
-
-	err = ch.ExchangeDeclare(
-		w.config.ExchangeName,
-		"fanout",
-		false,
-		true,
-		false,
-		false,
-		nil,
-	)
-	failOnError(err, "Failed to declare a exchange")
-
-	q, err := ch.QueueDeclare(
-		w.id,  // name
-		true,  // durable
-		true,  // delete when unused
-		false, // exclusive
-		false, // no-wait
-		nil,   // arguments
-	)
-	failOnError(err, "Failed to declare a queue")
-
-	err = ch.QueueBind(
-		q.Name,
-		"",
-		w.config.ExchangeName,
-		true,
-		nil,
-	)
-	failOnError(err, "Failed on bind")
-
-	err = ch.Qos(
-		1,     // prefetch count
-		0,     // prefetch size
-		false, // global
-	)
-	failOnError(err, "Failed to set QoS")
-
-	msgs, err := ch.Consume(
-		q.Name, // queue
-		"",     // consumer
-		false,  // auto-ack
-		false,  // exclusive
-		false,  // no-local
-		false,  // no-wait
-		nil,    // args
-	)
-	failOnError(err, "Failed to register a consumer")
-	return msgs
+func parseUserIDs(value string) (result []int, err error) {
+	for _, userID := range strings.Split(value, ",") {
+		id, err := strconv.Atoi(userID)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, id)
+	}
+	return result, nil
 }
 
 // Work just do your work
 func (w *Worker) Work() {
-	messages := w.declareAndConnect()
+	messages, err := w.Queue.Consume()
+	failOnError(err, "Fail to start consumer")
 	for msg := range messages {
-		value, prs := msg.Headers["groupName"]
+		value, prs := msg.Headers["UserIDs"]
 		if !prs {
+			fmt.Println("Error group name has not type string")
 			msg.Reject(false)
-			return
+			continue
 		}
 
-		switch name := value.(type) {
-		case string:
-			w.Broadcast(name, msg.Body)
-			msg.Ack(false)
-		default:
-		    fmt.Println("Error group name has not type string")
+		UserIDs, err := parseUserIDs(value.(string))
+		if err != nil {
+			fmt.Println("Error group name has not type string")
 			msg.Reject(false)
+			continue
 		}
+
+		go func(UserIDs []int, msg amqp.Delivery) {
+			w.Broadcast(UserIDs, msg.Body)
+			msg.Ack(false)
+		}(UserIDs, msg)
 	}
 }
 
 // AddConn add connection
-func (w *Worker) AddConn(groupName string, conn *websocket.Conn) {
+func (w *Worker) AddConn(UserID int, conn *websocket.Conn) {
 	defer w.lock.Unlock()
 	w.lock.Lock()
-	group, prs := w.groups[groupName]
+	group, prs := w.groups[UserID]
 	if prs {
-		w.groups[groupName] = append(group, conn)
+		group.Lock.Lock()
+		defer group.Lock.Unlock()
+		group.Connections = append(group.Connections, conn)
 	} else {
-		w.groups[groupName] = append(make(Group, 0), conn)
+		group.Connections = append(make(Connections, 0), conn)
 	}
 }
 
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-	CheckOrigin: func(r *http.Request) bool {
-		// allow all connections
-		return true
-	},
+var (
+	upgrader = websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+		CheckOrigin: func(r *http.Request) bool {
+			// allow all connections
+			return true
+		},
+	}
+	jwtParser = jwt.Parser{}
+)
+
+// AuthTokenClaims extended token claims
+type AuthTokenClaims struct {
+	UserID int `json:"id"`
+	jwt.StandardClaims
+}
+
+func validateToken(token, secret string) (*jwt.Token, error) {
+	return jwtParser.Parse(
+		token,
+		func(token *jwt.Token) (interface{}, error) {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
+			}
+			return secret, nil
+		},
+	)
 }
 
 func main() {
 	config, err := readConfig()
 	failOnError(err, "Fail to read config")
 
-	worker := NewWorker(config)
+	worker, err := NewWorker(config)
+	failOnError(err, "Fail to create worker")
 	go worker.Work()
 
 	http.HandleFunc("/wsapi/stream", func(w http.ResponseWriter, r *http.Request) {
+		authCookie, err := r.Cookie(config.AuthCookieName)
+		if err != nil {
+			fmt.Println(err)
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		token, err := validateToken(authCookie.Value, config.AuthSecretKey)
+		if err != nil || !token.Valid {
+			fmt.Println(err)
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		claims, ok := token.Claims.(*AuthTokenClaims)
+		if !ok {
+			fmt.Println(err)
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+
+		fmt.Println(claims.UserID)
+
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			fmt.Println(err)
 			return
 		}
-		// defer conn.Close()
-
 		fmt.Println("Client subscribed")
-		name := r.URL.Query().Get("id")
-		fmt.Println(name)
-		worker.AddConn(name, conn)
+
+		worker.AddConn(claims.UserID, conn)
 	})
 	if config.Debug {
 		indexFile, err := os.Open("index.html")
@@ -238,3 +388,4 @@ func main() {
 }
 
 // TODO safe exit
+// TODO unbind
