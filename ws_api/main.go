@@ -317,12 +317,6 @@ var (
 	jwtParser = jwt.Parser{}
 )
 
-// AuthTokenClaims extended token claims
-type AuthTokenClaims struct {
-	UserID int `json:"id"`
-	jwt.StandardClaims
-}
-
 func validateToken(token, secret string) (*jwt.Token, error) {
 	return jwtParser.Parse(
 		token,
@@ -330,7 +324,7 @@ func validateToken(token, secret string) (*jwt.Token, error) {
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, fmt.Errorf("Unexpected signing method: %v", token.Header["alg"])
 			}
-			return secret, nil
+			return []byte(secret), nil
 		},
 	)
 }
@@ -346,34 +340,40 @@ func main() {
 	http.HandleFunc("/wsapi/stream", func(w http.ResponseWriter, r *http.Request) {
 		authCookie, err := r.Cookie(config.AuthCookieName)
 		if err != nil {
+			fmt.Println("No cookie")
 			fmt.Println(err)
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
 		token, err := validateToken(authCookie.Value, config.AuthSecretKey)
 		if err != nil || !token.Valid {
+			fmt.Println("Invalid token")
 			fmt.Println(err)
+			fmt.Println([]byte(config.AuthSecretKey))
+			fmt.Println(token)
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
 
-		claims, ok := token.Claims.(*AuthTokenClaims)
+		claims, ok := token.Claims.(jwt.MapClaims)
 		if !ok {
-			fmt.Println(err)
+			fmt.Println("Error claims parsing")
+			fmt.Println(token.Claims)
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
 
-		fmt.Println(claims.UserID)
+		fmt.Println(claims)
 
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			fmt.Println(err)
 			return
 		}
-		fmt.Println("Client subscribed")
 
-		worker.AddConn(claims.UserID, conn)
+        userID, _ := strconv.Atoi(claims["id"].(string))
+		worker.AddConn(userID, conn)
+		fmt.Println("Client subscribed")
 	})
 	if config.Debug {
 		indexFile, err := os.Open("index.html")
