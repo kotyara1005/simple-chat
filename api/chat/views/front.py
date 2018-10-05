@@ -9,21 +9,22 @@ bp = Blueprint(__name__, __name__, template_folder='templates')
 @bp.route('/')
 def index():
     if not auth.current_user:
-        return redirect(url_for('chat.front.login'))
+        return redirect(url_for('chat.views.front.login'))
     else:
-        return redirect(url_for('chat.front.chat_list'))
+        return redirect(url_for('chat.views.front.chat_list'))
 
 
 @bp.route('/login', methods=('GET', 'POST'))
 def login():
     if request.method == 'POST':
+        data = request.values.to_dict()
         token, expires = User.login(
-            request.json['name'],
-            request.json['password'],
+            data['name'],
+            data['password'],
         )
         if token is None:
             abort(401, "Wrong credentials")
-        response = redirect(url_for('chat.front.chat'))
+        response = redirect(url_for('chat.views.front.chat_list'))
         auth.set_auth_cookie(response, token, expires)
         return response
     return render_template('login.html')
@@ -32,13 +33,14 @@ def login():
 @bp.route('/register', methods=('GET', 'POST'))
 def register():
     if request.method == 'POST':
+        data = request.values.to_dict()
         user = User.register(
-            request.json['name'],
-            request.json['password'],
+            data['name'],
+            data['password'],
         )
         if user is None:
             return abort(400)
-        return redirect(url_for('chat.front.login'))
+        return redirect(url_for('chat.views.front.login'))
     return render_template('registration.html')
 
 
@@ -56,6 +58,6 @@ def chat_list():
 
 @bp.route('/logout', methods=('POST',))
 def logout():
-    response = redirect(url_for('chat.front.login'))
+    response = redirect(url_for('chat.views.front.login'))
     auth.clear_auth_cookie(response)
     return response
