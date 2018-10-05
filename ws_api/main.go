@@ -205,7 +205,7 @@ func (q *Queue) Consume() (<-chan amqp.Delivery, error) {
 // Worker it works
 type Worker struct {
 	id     string
-	groups map[int]Group
+	groups map[int]*Group
 	lock   sync.Mutex
 	config *Config
 	Queue  *Queue
@@ -219,7 +219,7 @@ func NewWorker(config *Config) (*Worker, error) {
 		return nil, err
 	}
 	return &Worker{
-		groups: make(map[int]Group),
+		groups: make(map[int]*Group),
 		id:     id,
 		config: config,
 		Queue:  queue,
@@ -236,21 +236,20 @@ func (w *Worker) Broadcast(groupIDs []int, message []byte) {
 			return
 		}
 		// TODO refactor use chan and Group worker
-		go func() {
-			group.Lock.Lock()
-			defer group.Lock.Unlock()
-			for i, conn := range group.Connections {
-				if conn == nil {
-					continue
-				}
-				err := conn.WriteMessage(websocket.TextMessage, message)
-				if err != nil {
-					group.Connections[i] = nil
-					defer conn.Close()
-				}
-			}
-			group.Connections = group.Connections.RemoveNIL()
-		}()
+        group.Lock.Lock()
+        defer group.Lock.Unlock()
+        for i, conn := range group.Connections {
+            if conn == nil {
+                continue
+            }
+            err := conn.WriteMessage(websocket.TextMessage, message)
+            if err != nil {
+                fmt.Println(err)
+                group.Connections[i] = nil
+                defer conn.Close()
+            }
+        }
+        group.Connections = group.Connections.RemoveNIL()
 	}
 }
 
@@ -284,10 +283,10 @@ func (w *Worker) Work() {
 			continue
 		}
 
-		go func(UserIDs []int, msg amqp.Delivery) {
+		// go func(UserIDs []int, msg amqp.Delivery) {
 			w.Broadcast(UserIDs, msg.Body)
 			msg.Ack(false)
-		}(UserIDs, msg)
+		// }(UserIDs, msg)
 	}
 }
 
@@ -295,14 +294,19 @@ func (w *Worker) Work() {
 func (w *Worker) AddConn(UserID int, conn *websocket.Conn) {
 	defer w.lock.Unlock()
 	w.lock.Lock()
-	group, prs := w.groups[UserID]
-	if prs {
-		group.Lock.Lock()
-		defer group.Lock.Unlock()
-		group.Connections = append(group.Connections, conn)
-	} else {
-		group.Connections = append(make(Connections, 0), conn)
+	err := w.Queue.Bind(UserID)
+	if err != nil {
+        fmt.Println(err)
+	    return
 	}
+	group, prs := w.groups[UserID]
+	if !prs {
+	    group = &Group{Connections: make(Connections, 0)}
+	    w.groups[UserID] = group
+	}
+    group.Lock.Lock()
+    defer group.Lock.Unlock()
+    group.Connections = append(group.Connections, conn)
 }
 
 var (
