@@ -21,6 +21,7 @@ const ConfigFilePath = "config.json"
 
 // Config application config
 type Config struct {
+    WorkersCount   int
 	ExchangeName   string
 	Port           string
 	Debug          bool
@@ -202,13 +203,19 @@ func (q *Queue) Consume() (<-chan amqp.Delivery, error) {
 	return msgs, nil
 }
 
+type workerMessage struct {
+    UserIDs []int
+    Message *amqp.Delivery
+}
+
 // Worker it works
 type Worker struct {
 	id     string
 	groups map[int]*Group
 	lock   sync.Mutex
 	config *Config
-	Queue  *Queue
+    Queue  *Queue
+    jobs   chan *workerMessage
 }
 
 // NewWorker create new worker
@@ -235,7 +242,6 @@ func (w *Worker) Broadcast(groupIDs []int, message []byte) {
 		if !prs {
 			return
 		}
-		// TODO refactor use chan and Group worker
         group.Lock.Lock()
         defer group.Lock.Unlock()
         for i, conn := range group.Connections {
@@ -265,7 +271,7 @@ func parseUserIDs(value string) (result []int, err error) {
 }
 
 // Work just do your work
-func (w *Worker) Work() {
+func (w *Worker) startMainWorker() {
 	messages, err := w.Queue.Consume()
 	failOnError(err, "Fail to start consumer")
 	for msg := range messages {
@@ -283,11 +289,23 @@ func (w *Worker) Work() {
 			continue
 		}
 
-		// go func(UserIDs []int, msg amqp.Delivery) {
-			w.Broadcast(UserIDs, msg.Body)
-			msg.Ack(false)
-		// }(UserIDs, msg)
+        w.jobs <- &workerMessage{UserIDs, &msg}
 	}
+}
+
+func (w *Worker) startSecondaryWorker() {
+    for msg := range w.jobs {
+        w.Broadcast(msg.UserIDs, msg.Message.Body)
+        msg.Message.Ack(false)
+    }
+}
+
+// Start Create main worker and few secondary workers
+func (w *Worker) Start() {
+    for i := 1; i < w.config.WorkersCount; i++ {
+        go w.startSecondaryWorker()
+    }
+    go w.startMainWorker()
 }
 
 // AddConn add connection
@@ -339,7 +357,7 @@ func main() {
 
 	worker, err := NewWorker(config)
 	failOnError(err, "Fail to create worker")
-	go worker.Work()
+	worker.Start()
 
 	http.HandleFunc("/wsapi/stream", func(w http.ResponseWriter, r *http.Request) {
 		authCookie, err := r.Cookie(config.AuthCookieName)

@@ -1,4 +1,5 @@
 {
+    "WorkersCount": 5,
     "ExchangeName": "MessageStream",
     "Port": "3000",
     "Debug": true,
