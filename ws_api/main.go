@@ -12,7 +12,7 @@ import (
 
 	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/gorilla/websocket"
-	"github.com/satori/go.uuid"
+	uuid "github.com/satori/go.uuid"
 	"github.com/streadway/amqp"
 )
 
@@ -21,7 +21,7 @@ const ConfigFilePath = "config.json"
 
 // Config application config
 type Config struct {
-    WorkersCount   int
+	WorkersCount   int
 	ExchangeName   string
 	Port           string
 	Debug          bool
@@ -204,8 +204,8 @@ func (q *Queue) Consume() (<-chan amqp.Delivery, error) {
 }
 
 type workerMessage struct {
-    UserIDs []int
-    Message *amqp.Delivery
+	UserIDs []int
+	Message *amqp.Delivery
 }
 
 // Worker it works
@@ -214,8 +214,8 @@ type Worker struct {
 	groups map[int]*Group
 	lock   sync.Mutex
 	config *Config
-    Queue  *Queue
-    jobs   chan *workerMessage
+	Queue  *Queue
+	jobs   chan *workerMessage
 }
 
 // NewWorker create new worker
@@ -230,6 +230,7 @@ func NewWorker(config *Config) (*Worker, error) {
 		id:     id,
 		config: config,
 		Queue:  queue,
+		jobs:   make(chan *workerMessage),
 	}, nil
 }
 
@@ -242,20 +243,20 @@ func (w *Worker) Broadcast(groupIDs []int, message []byte) {
 		if !prs {
 			return
 		}
-        group.Lock.Lock()
-        defer group.Lock.Unlock()
-        for i, conn := range group.Connections {
-            if conn == nil {
-                continue
-            }
-            err := conn.WriteMessage(websocket.TextMessage, message)
-            if err != nil {
-                fmt.Println(err)
-                group.Connections[i] = nil
-                defer conn.Close()
-            }
-        }
-        group.Connections = group.Connections.RemoveNIL()
+		group.Lock.Lock()
+		defer group.Lock.Unlock()
+		for i, conn := range group.Connections {
+			if conn == nil {
+				continue
+			}
+			err := conn.WriteMessage(websocket.TextMessage, message)
+			if err != nil {
+				fmt.Println(err)
+				group.Connections[i] = nil
+				defer conn.Close()
+			}
+		}
+		group.Connections = group.Connections.RemoveNIL()
 	}
 }
 
@@ -275,6 +276,7 @@ func (w *Worker) startMainWorker() {
 	messages, err := w.Queue.Consume()
 	failOnError(err, "Fail to start consumer")
 	for msg := range messages {
+		fmt.Println(msg)
 		value, prs := msg.Headers["UserIDs"]
 		if !prs {
 			fmt.Println("Error group name has not type string")
@@ -289,23 +291,23 @@ func (w *Worker) startMainWorker() {
 			continue
 		}
 
-        w.jobs <- &workerMessage{UserIDs, &msg}
+		w.jobs <- &workerMessage{UserIDs, &msg}
 	}
 }
 
 func (w *Worker) startSecondaryWorker() {
-    for msg := range w.jobs {
-        w.Broadcast(msg.UserIDs, msg.Message.Body)
-        msg.Message.Ack(false)
-    }
+	for msg := range w.jobs {
+		w.Broadcast(msg.UserIDs, msg.Message.Body)
+		msg.Message.Ack(false)
+	}
 }
 
 // Start Create main worker and few secondary workers
 func (w *Worker) Start() {
-    for i := 1; i < w.config.WorkersCount; i++ {
-        go w.startSecondaryWorker()
-    }
-    go w.startMainWorker()
+	for i := 1; i < w.config.WorkersCount; i++ {
+		go w.startSecondaryWorker()
+	}
+	go w.startMainWorker()
 }
 
 // AddConn add connection
@@ -314,17 +316,17 @@ func (w *Worker) AddConn(UserID int, conn *websocket.Conn) {
 	w.lock.Lock()
 	err := w.Queue.Bind(UserID)
 	if err != nil {
-        fmt.Println(err)
-	    return
+		fmt.Println(err)
+		return
 	}
 	group, prs := w.groups[UserID]
 	if !prs {
-	    group = &Group{Connections: make(Connections, 0)}
-	    w.groups[UserID] = group
+		group = &Group{Connections: make(Connections, 0)}
+		w.groups[UserID] = group
 	}
-    group.Lock.Lock()
-    defer group.Lock.Unlock()
-    group.Connections = append(group.Connections, conn)
+	group.Lock.Lock()
+	defer group.Lock.Unlock()
+	group.Connections = append(group.Connections, conn)
 }
 
 var (
@@ -393,7 +395,7 @@ func main() {
 			return
 		}
 
-        userID, _ := strconv.Atoi(claims["id"].(string))
+		userID, _ := strconv.Atoi(claims["id"].(string))
 		worker.AddConn(userID, conn)
 		fmt.Println("Client subscribed")
 	})

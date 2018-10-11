@@ -23,12 +23,14 @@ class ConversationView(RESTView):
     @classmethod
     def get_query_for_user(cls):
         return cls.get_query().filter(
-            Conversation.id.in_(db.session.query(Participant.conversation_id).filter_by(user_id=current_user.id))
+            Conversation.id
+            .in_(db.session.query(Participant.conversation_id)
+            .filter_by(user_id=current_user.id))
         )
 
     @validate()
     @login_required()
-    def create(self, user_id, **kwargs):
+    def create(self, **kwargs):
         user_id = current_user.id
         with CommitOnSuccess():
             conversation = self.model(user_id=user_id, name='test', **kwargs)
