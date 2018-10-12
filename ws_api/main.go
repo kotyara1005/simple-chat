@@ -71,7 +71,7 @@ func (conns Connections) RemoveNIL() Connections {
 	return conns[:current]
 }
 
-func (conns Connections) CloseAll {
+func (conns Connections) CloseAll() {
 	// Close all connections
 }
 
@@ -81,7 +81,7 @@ type Group struct {
 	Lock        sync.Mutex
 }
 
-func (g *Group) CloseAll {
+func (g *Group) CloseAll() {
 	// Close all connections
 }
 
