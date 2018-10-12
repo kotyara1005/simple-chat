@@ -57,12 +57,6 @@ func failOnError(err error, msg string) {
 // Connections websocket connections slice
 type Connections []*websocket.Conn
 
-// Group connections group
-type Group struct {
-	Connections Connections
-	Lock        sync.Mutex
-}
-
 // RemoveNIL remove nil pointers from connections
 func (conns Connections) RemoveNIL() Connections {
 	current := 0
@@ -75,6 +69,20 @@ func (conns Connections) RemoveNIL() Connections {
 		}
 	}
 	return conns[:current]
+}
+
+func (conns Connections) CloseAll {
+	// Close all connections
+}
+
+// Group connections group
+type Group struct {
+	Connections Connections
+	Lock        sync.Mutex
+}
+
+func (g *Group) CloseAll {
+	// Close all connections
 }
 
 // Queue class
@@ -228,12 +236,13 @@ type workerMessage struct {
 
 // Worker it works
 type Worker struct {
-	id     string
-	groups map[int]*Group
-	lock   sync.Mutex
-	config *Config
-	Queue  *Queue
-	jobs   chan *workerMessage
+	id        string
+	groups    map[int]*Group
+	lock      sync.Mutex
+	config    *Config
+	Queue     *Queue
+	jobs      chan *workerMessage
+	waitGroup sync.WaitGroup
 }
 
 // NewWorker create new worker
@@ -250,6 +259,13 @@ func NewWorker(config *Config) (*Worker, error) {
 		Queue:  queue,
 		jobs:   make(chan *workerMessage),
 	}, nil
+}
+
+func (w *Worker) Close() {
+	w.Queue.Close()
+	close(w.jobs)
+	w.waitGroup.Wait()
+	// TODO Close connections
 }
 
 // Broadcast send message to all connections in group
@@ -291,6 +307,7 @@ func parseUserIDs(value string) (result []int, err error) {
 
 // Work just do your work
 func (w *Worker) startMainWorker() {
+	defer w.waitGroup.Done()
 	messages, err := w.Queue.Consume()
 	failOnError(err, "Fail to start consumer")
 	for msg := range messages {
@@ -314,6 +331,7 @@ func (w *Worker) startMainWorker() {
 }
 
 func (w *Worker) startSecondaryWorker() {
+	defer w.waitGroup.Done()
 	for msg := range w.jobs {
 		w.Broadcast(msg.UserIDs, msg.Message.Body)
 		msg.Message.Ack(false)
@@ -323,8 +341,10 @@ func (w *Worker) startSecondaryWorker() {
 // Start Create main worker and few secondary workers
 func (w *Worker) Start() {
 	for i := 1; i < w.config.WorkersCount; i++ {
+		w.waitGroup.Add(1)
 		go w.startSecondaryWorker()
 	}
+	w.waitGroup.Add(1)
 	go w.startMainWorker()
 }
 
@@ -378,6 +398,7 @@ func main() {
 	worker, err := NewWorker(config)
 	failOnError(err, "Fail to create worker")
 	worker.Start()
+	defer worker.Close()
 
 	http.HandleFunc("/wsapi/stream", func(w http.ResponseWriter, r *http.Request) {
 		authCookie, err := r.Cookie(config.AuthCookieName)
@@ -429,5 +450,4 @@ func main() {
 	http.ListenAndServe(":"+config.Port, nil)
 }
 
-// TODO safe exit
 // TODO unbind
