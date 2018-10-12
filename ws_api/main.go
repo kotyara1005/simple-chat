@@ -159,6 +159,13 @@ func (q *Queue) Declare() error {
 	return nil
 }
 
+func (q *Queue) getBindTable(UserID int) amqp.Table {
+	return amqp.Table{
+		"UserID:" + strconv.Itoa(UserID): true,
+		"x-match":                        "any",
+	}
+}
+
 // Bind binds exchange and queue for accept user's messages
 func (q *Queue) Bind(UserID int) error {
 	err := q.channel.QueueBind(
@@ -166,10 +173,21 @@ func (q *Queue) Bind(UserID int) error {
 		"",
 		q.exchangeName,
 		true,
-		amqp.Table{
-			"UserID:" + strconv.Itoa(UserID): true,
-			"x-match":                        "any",
-		},
+		q.getBindTable(UserID),
+	)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// Unbind unbinds exchange and queue
+func (q *Queue) Unbind(UserID int) error {
+	err := q.channel.QueueUnbind(
+		q.queue.Name,
+		"",
+		q.exchangeName,
+		q.getBindTable(UserID),
 	)
 	if err != nil {
 		return err
