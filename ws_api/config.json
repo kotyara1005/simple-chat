@@ -1,5 +1,6 @@
 {
     "WorkersCount": 5,
+    "CleanUpPeriod": 5,
     "ExchangeName": "MessageStream",
     "Port": "3000",
     "Debug": true,

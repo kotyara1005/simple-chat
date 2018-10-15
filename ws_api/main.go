@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/gorilla/websocket"
@@ -22,6 +23,7 @@ const ConfigFilePath = "config.json"
 // Config application config
 type Config struct {
 	WorkersCount   int
+	CleanUpPeriod  int
 	ExchangeName   string
 	Port           string
 	Debug          bool
@@ -236,13 +238,14 @@ type workerMessage struct {
 
 // Worker it works
 type Worker struct {
-	id        string
-	groups    map[int]*Group
-	lock      sync.Mutex
-	config    *Config
-	Queue     *Queue
-	jobs      chan *workerMessage
-	waitGroup sync.WaitGroup
+	id            string
+	groups        map[int]*Group
+	lock          sync.Mutex
+	config        *Config
+	Queue         *Queue
+	jobs          chan *workerMessage
+	cleanupTicker *time.Ticker
+	waitGroup     sync.WaitGroup
 }
 
 // NewWorker create new worker
@@ -262,35 +265,38 @@ func NewWorker(config *Config) (*Worker, error) {
 }
 
 func (w *Worker) Close() {
+	w.cleanupTicker.Stop()
 	w.Queue.Close()
 	close(w.jobs)
 	w.waitGroup.Wait()
-	// TODO Close connections
 }
 
 // Broadcast send message to all connections in group
 func (w *Worker) Broadcast(groupIDs []int, message []byte) {
 	w.lock.Lock()
-	defer w.lock.Unlock()
+	var groups []*Group
 	for _, groupID := range groupIDs {
 		group, prs := w.groups[groupID]
-		if !prs {
-			return
+		if prs {
+			groups = append(groups, group)
 		}
+	}
+	w.lock.Unlock()
+	for _, group := range groups {
 		group.Lock.Lock()
-		defer group.Lock.Unlock()
 		for i, conn := range group.Connections {
 			if conn == nil {
 				continue
 			}
 			err := conn.WriteMessage(websocket.TextMessage, message)
 			if err != nil {
-				fmt.Println(err)
+				fmt.Println("Write error", err)
 				group.Connections[i] = nil
 				defer conn.Close()
 			}
 		}
 		group.Connections = group.Connections.RemoveNIL()
+		group.Lock.Unlock()
 	}
 }
 
@@ -306,7 +312,7 @@ func parseUserIDs(value string) (result []int, err error) {
 }
 
 // Work just do your work
-func (w *Worker) startMainWorker() {
+func (w *Worker) startConsumer() {
 	defer w.waitGroup.Done()
 	messages, err := w.Queue.Consume()
 	failOnError(err, "Fail to start consumer")
@@ -330,7 +336,7 @@ func (w *Worker) startMainWorker() {
 	}
 }
 
-func (w *Worker) startSecondaryWorker() {
+func (w *Worker) startSender() {
 	defer w.waitGroup.Done()
 	for msg := range w.jobs {
 		w.Broadcast(msg.UserIDs, msg.Message.Body)
@@ -338,14 +344,34 @@ func (w *Worker) startSecondaryWorker() {
 	}
 }
 
+func (w *Worker) startCleanuper() {
+	w.cleanupTicker = time.NewTicker(time.Duration(w.config.CleanUpPeriod) * time.Second)
+	for range w.cleanupTicker.C {
+		w.lock.Lock()
+		for groupID, group := range w.groups {
+			group.Lock.Lock()
+			if len(group.Connections) == 0 {
+				err := w.Queue.Unbind(groupID)
+				if err == nil {
+					delete(w.groups, groupID)
+				}
+			}
+			group.Lock.Unlock()
+		}
+		w.lock.Unlock()
+	}
+}
+
 // Start Create main worker and few secondary workers
 func (w *Worker) Start() {
 	for i := 1; i < w.config.WorkersCount; i++ {
 		w.waitGroup.Add(1)
-		go w.startSecondaryWorker()
+		go w.startSender()
 	}
 	w.waitGroup.Add(1)
-	go w.startMainWorker()
+	go w.startConsumer()
+	w.waitGroup.Add(1)
+	go w.startCleanuper()
 }
 
 // AddConn add connection
@@ -449,5 +475,3 @@ func main() {
 	}
 	http.ListenAndServe(":"+config.Port, nil)
 }
-
-// TODO unbind
